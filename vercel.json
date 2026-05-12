@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/daily-feishu",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+export const platformSources = {
+  xiaohongshu: {
+    enabled: false,
+    name: "小红书公开网页信号",
+    type: "platform_signal",
+    fetchMode: "pending",
+    status: "待接入",
+    note: "预留小红书公开页面或后续数据源，不伪造平台榜单。",
+  },
+  douyin: {
+    enabled: false,
+    name: "抖音公开网页信号",
+    type: "platform_signal",
+    fetchMode: "pending",
+    status: "待接入",
+    note: "预留抖音公开页面或后续数据源，不伪造平台榜单。",
+  },
+  shipinhao: {
+    enabled: false,
+    name: "视频号公开网页信号",
+    type: "platform_signal",
+    fetchMode: "pending",
+    status: "待接入",
+    note: "预留视频号公开页面或后续数据源，不伪造平台榜单。",
+  },
+  wechatOfficialAccount: {
+    enabled: false,
+    name: "公众号公开内容信号",
+    type: "platform_signal",
+    fetchMode: "pending",
+    status: "待接入",
+    note: "预留公众号公开内容检索或后续数据源。",
+  },
+  industryReports: {
+    enabled: false,
+    name: "行业报告与新闻网页",
+    type: "web_search",
+    fetchMode: "responses_web_search",
+    status: "已接入公开网页搜索",
+    note: "当前省钱测试模式不自动调用；仅在单个热点获取来源证据时使用 OpenAI web_search。",
+  },
+} as const;

@@ -5,6 +5,17 @@ export type FeishuRadarHotspot = {
   attentionReason?: string;
   fitPlatforms?: string[];
   sourceChannel?: string;
+  verificationStatus?: string;
+  sourceCredibility?: string;
+  credibility?: string;
+  totalScore?: number;
+  recommendReason?: string;
+  recommendLevel?: string;
+  scores?: {
+    label: string;
+    value: number;
+    explanation?: string;
+  }[];
 };
 
 export type DailyRadarFeishuMessageInput = {

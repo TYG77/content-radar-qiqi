@@ -1,4 +1,6 @@
-import { pushDailyRadarToFeishu } from "@/app/lib/feishu/client";
+import { getDefaultContentRadarHotspots } from "@/app/lib/content-radar";
+import { sendFeishuWebhookMessage } from "@/app/lib/feishu/client";
+import { buildDailyRadarFeishuMessage } from "@/app/lib/feishu/message";
 
 export const runtime = "nodejs";
 
@@ -23,7 +25,23 @@ async function handleCronPush(request: Request) {
     );
   }
 
-  const result = await pushDailyRadarToFeishu({ mode: "scheduled" });
+  const appUrl = process.env.CONTENT_RADAR_APP_URL?.trim();
+  if (!appUrl) {
+    return Response.json({
+      ok: false,
+      message: "CONTENT_RADAR_APP_URL 未配置，请先在 Vercel 环境变量中配置线上工作台地址。",
+    });
+  }
+
+  const now = new Date();
+  const message = buildDailyRadarFeishuMessage({
+    date: formatDate(now),
+    appUrl,
+    generatedAt: formatDateTime(now),
+    mode: "scheduled",
+    hotspots: getDefaultContentRadarHotspots(),
+  });
+  const result = await sendFeishuWebhookMessage(message);
 
   return Response.json({
     ok: result.ok,
@@ -63,4 +81,24 @@ function validateCronSecret(request: Request):
     status: 200,
     message: "校验通过。",
   };
+}
+
+function formatDate(date: Date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Shanghai",
+  }).format(date);
+}
+
+function formatDateTime(date: Date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Shanghai",
+  }).format(date);
 }

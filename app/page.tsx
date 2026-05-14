@@ -3716,6 +3716,7 @@ function PublishPreviewView({
     hasAppSecret: false,
     hasThumbMediaId: false,
   });
+  const [wechatRuntimeMode, setWechatRuntimeMode] = useState<"local" | "online">("online");
   const copyButtonText =
     htmlCopyState === "copying"
       ? "正在复制..."
@@ -3758,6 +3759,10 @@ function PublishPreviewView({
         : coverState.source === "manual"
           ? "已使用手动 media_id"
           : "未获取封面 media_id";
+  const wechatRuntimeModeText =
+    wechatRuntimeMode === "local"
+      ? "当前为本地模式：公众号素材上传会从你的本机公网 IP 发起。若该 IP 已加入公众号白名单，通常可以上传封面并写入草稿箱。"
+      : "当前为线上模式：公众号素材上传会从 Vercel 服务器出口 IP 发起，不等于你的本机公网 IP。若上传失败，建议回到 localhost:3000 完成封面上传和写入公众号草稿箱。";
 
   useEffect(() => {
     let ignore = false;
@@ -3798,6 +3803,17 @@ function PublishPreviewView({
     return () => {
       ignore = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const hostname = window.location.hostname;
+      setWechatRuntimeMode(
+        hostname === "localhost" || hostname === "127.0.0.1" ? "local" : "online",
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, []);
 
   function resetHtmlCopyState() {
@@ -3908,21 +3924,22 @@ function PublishPreviewView({
       case "MISSING_FILE":
         return "请先选择一张封面图。";
       case "INVALID_FILE_TYPE":
-        return "仅支持 jpg、jpeg、png 格式封面图。";
+        return "上传失败：图片格式不支持，请使用 jpg/jpeg/png。";
       case "FILE_TOO_LARGE":
-        return "封面图文件过大，请压缩后再上传。";
+        return "上传失败：封面图片过大，请压缩后再上传。";
       case "WECHAT_CONFIG_INVALID":
-        return "公众号 AppID 或 AppSecret 可能不正确，请检查配置。";
+        return "上传失败：公众号配置不完整，请检查 WECHAT_APP_ID / WECHAT_APP_SECRET。";
       case "WECHAT_IP_NOT_ALLOWED":
-        return "上传失败，可能是当前公网 IP 未加入公众号 IP 白名单。";
+        return "上传失败：当前请求出口 IP 未加入微信公众号 IP 白名单。若你正在使用 Vercel 线上工作台，微信看到的是 Vercel 出口 IP，不是你的本机公网 IP。建议回到 localhost:3000 完成封面上传。";
       case "WECHAT_TOKEN_FAILED":
-        return "获取公众号 access_token 失败，请检查 AppID、AppSecret 和 IP 白名单。";
+        return "上传失败：公众号 access_token 获取失败，请检查 AppID、AppSecret、IP 白名单和环境变量是否已重新部署生效。";
       case "WECHAT_MATERIAL_FAILED":
-        return "封面素材上传失败，请检查公众号素材接口权限或稍后重试。";
+        return "上传失败：微信素材接口返回失败。若本地可上传但线上不可上传，大概率是 Vercel 出口 IP 不在公众号白名单。建议回到本地工作台完成上传。";
       case "UNKNOWN":
+        return "上传失败：暂未识别具体原因。如果本地可以上传、线上不能上传，优先按 Vercel 出口 IP 白名单问题处理。";
       default:
         if (message?.trim()) return message.trim();
-        return "封面素材上传失败，请稍后重试或手动填写 media_id。";
+        return "上传失败：暂未识别具体原因。如果本地可以上传、线上不能上传，优先按 Vercel 出口 IP 白名单问题处理。";
     }
   }
 
@@ -4130,6 +4147,12 @@ function PublishPreviewView({
         <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm leading-6 text-green-900">
           当前支持写入公众号草稿箱，不会自动发布。写入成功后，请进入公众号后台草稿箱人工微调并手动发布。
         </p>
+        <p className="mt-3 rounded-lg bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+          {wechatRuntimeModeText}
+        </p>
+        <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+          当前 V1 推荐：线上工作台用于内容生成和排版预览；公众号素材上传、封面 media_id、写入草稿箱建议在本地 localhost:3000 完成。因为微信公众号接口受 IP 白名单限制，Vercel 线上出口 IP 不等于本机公网 IP。
+        </p>
         <div className="mt-3 grid gap-2 rounded-lg border border-green-100 bg-white p-3 text-xs leading-5 text-stone-600 sm:grid-cols-4">
           <p>草稿箱启用：{wechatConfigStatus.enabled ? "是" : "否"}</p>
           <p>AppID 已配置：{wechatConfigStatus.hasAppId ? "是" : "否"}</p>
@@ -4142,6 +4165,9 @@ function PublishPreviewView({
               <h4 className="text-sm font-semibold text-stone-950">
                 公众号封面素材
               </h4>
+              <p className="mt-2 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-stone-600">
+                {wechatRuntimeModeText}
+              </p>
               <p className="mt-2 text-sm leading-6 text-stone-600">
                 {coverSourceLabel}。{coverState.message}
               </p>

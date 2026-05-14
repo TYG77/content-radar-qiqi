@@ -46,7 +46,14 @@ export async function pushDailyRadarToFeishu(
 ): Promise<FeishuSendResult> {
   try {
     const now = new Date();
-    const appUrl = process.env.CONTENT_RADAR_APP_URL?.trim() || "http://localhost:3000";
+    const appUrl = process.env.CONTENT_RADAR_APP_URL?.trim();
+    if (!appUrl) {
+      return {
+        ok: false,
+        message: "CONTENT_RADAR_APP_URL 未配置，请先在环境变量中配置线上工作台地址。",
+      };
+    }
+
     const message = buildDailyRadarFeishuMessage({
       date: formatDate(now),
       appUrl,
@@ -84,14 +91,47 @@ function normalizeHotspot(value: unknown): FeishuRadarHotspot | null {
     sourceEvidence: stringValue(record.sourceEvidence),
     attentionReason: stringValue(record.attentionReason),
     sourceChannel: stringValue(record.sourceChannel),
+    verificationStatus: stringValue(record.verificationStatus),
+    sourceCredibility: stringValue(record.sourceCredibility),
+    credibility: stringValue(record.credibility),
+    totalScore: numberValue(record.totalScore),
+    recommendReason: stringValue(record.recommendReason),
+    recommendLevel: stringValue(record.recommendLevel),
+    scores: normalizeScoreItems(record.scores),
     fitPlatforms: Array.isArray(record.fitPlatforms)
       ? record.fitPlatforms.map(stringValue).filter(Boolean)
       : [],
   };
 }
 
+function normalizeScoreItems(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const label = stringValue(record.label);
+      const value = numberValue(record.value);
+      if (!label || typeof value !== "number") return null;
+
+      return {
+        label,
+        value,
+        explanation: stringValue(record.explanation),
+      };
+    })
+    .filter((item): item is { label: string; value: number; explanation: string } =>
+      Boolean(item),
+    );
+}
+
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function numberValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function formatDate(date: Date) {

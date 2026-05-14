@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "feishu:push": "node scripts/feishu-daily-push.js"
+    "feishu:push": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/feishu-daily-push.js"
   },
   "dependencies": {
     "next": "16.2.4",

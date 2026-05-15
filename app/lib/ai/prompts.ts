@@ -1,4 +1,4 @@
-import type { AiTask } from "./schemas";
+﻿import type { AiTask } from "./schemas";
 
 export const qiqiProfile = `
 陈七七77，大健康行业 IP 操盘手，也是一名女性营养师。她主要服务营养师、中医/医馆、健康品牌、私域团队和大健康个人 IP。她擅长帮助客户从 0 到 1 搭建内容、私域、课程发售、用户运营和商业转化闭环。她既懂健康专业内容，也懂商业转化、课程发售、私域运营和 AI 工具落地。
@@ -27,27 +27,42 @@ const sourceEvidenceRules = `
 `;
 
 export function buildPrompt(task: AiTask, payload: unknown) {
+  const inspirationHint = hasInspirationContext(payload)
+    ? "\n\n【灵感上下文】如果输入里包含 matchedInspirations、matchedInspirationIds、qiqiFitReason、howToUseInArticle、conversionBridge、authenticityBoost、useAngle、articlePlacement、contentRole、suggestedExpression 或 caution，请优先把它们当成七七真实灵感支撑来使用；不要机械照搬，也不要把个人观察包装成真实热点。"
+    : "";
+
   return `
 你是陈七七77的内容工作台 AI，负责把大健康行业热点变成可发布、可延展、可承接私域的内容资产。
+【角色背景】${qiqiProfile}
 
-【角色背景】
-${qiqiProfile}
+【写作风格】${qiqiStyle}
 
-【写作风格】
-${qiqiStyle}
+【任务】${getTaskInstruction(task)}${inspirationHint}
 
-【任务】
-${getTaskInstruction(task)}
+【来源证据约束】${sourceEvidenceRules}
 
-【来源证据约束】
-${sourceEvidenceRules}
+【输入】${JSON.stringify(payload, null, 2)}
 
-【输入】
-${JSON.stringify(payload, null, 2)}
-
-【输出要求】
-${sharedOutputRules}
+【输出要求】${sharedOutputRules}
 `;
+}
+
+function hasInspirationContext(payload: unknown) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+  const value = payload as Record<string, unknown>;
+  return (
+    Array.isArray(value.matchedInspirations) ||
+    Array.isArray(value.matchedInspirationIds) ||
+    typeof value.qiqiFitReason === 'string' ||
+    typeof value.howToUseInArticle === 'string' ||
+    typeof value.conversionBridge === 'string' ||
+    typeof value.authenticityBoost === 'number' ||
+    typeof value.useAngle === 'string' ||
+    typeof value.articlePlacement === 'string' ||
+    typeof value.contentRole === 'string' ||
+    typeof value.suggestedExpression === 'string' ||
+    typeof value.caution === 'string'
+  );
 }
 
 function getTaskInstruction(task: AiTask) {
@@ -270,3 +285,4 @@ JSON 示例：
       return "生成陈七七77内容工作台所需结构化内容。";
   }
 }
+

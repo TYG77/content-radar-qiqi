@@ -42,3 +42,21 @@
 | qiqi-localstorage-ui-module | 为首页工作台新增低风险 UI 模块，包含浏览器 localStorage 保存、列表展示、筛选、复制、删除、归档和接入现有页面状态入口；禁止接真实平台、API、Provider、数据库、飞书、公众号后台。 | A | 已登记，暂不自动创建执行型 Skill |
 | qiqi-ai-task-ui-inbox | 为现有工作台新增低风险 AI 整理任务，复用既有 `/api/ai`、prompt、schema、task 链路，把原始文本整理为候选 UI 数据；禁止新增 Provider、真实平台来源、数据库、飞书、公众号后台和密钥配置。 | A/B | 已登记，暂不自动创建执行型 Skill |
 | qiqi-inspiration-fusion-planning | 沉淀七七真实内容资产池的 PRD、输入通道分层、热点融合工作流、数据结构扩展和后续任务拆分；仅用于方案与文档，不自动执行业务代码。 | A/B | 已登记，暂不自动创建执行型 Skill |
+
+## 2026-05-15 灵感热点轻量匹配登记
+
+| Skill 名称 | 用途 | 风险等级 | 状态 |
+| --- | --- | --- | --- |
+| qiqi-inspiration-hotspot-match | 读取 `qiqi_inspiration_pool_v1`，对今日选题做轻量关键词匹配，生成可引用灵感、匹配理由和文章使用建议，仅限 UI / localStorage / 提示词上下文补充，不接真实平台与数据库。 | A | 已登记，暂不自动创建执行型 Skill |
+
+## 2026-05-15 灵感角度提炼登记
+
+| Skill 名称 | 用途 | 风险等级 | 状态 |
+| --- | --- | --- | --- |
+| qiqi-inspiration-angle-match | 将灵感与今日选题的关系从“案例关联”升级为“角度提炼”，输出 useAngle、matchReason、articlePlacement、contentRole、suggestedExpression、caution，仅限 UI / localStorage / 提示词上下文补充。 | A | 已登记，暂不自动创建执行型 Skill |
+
+## 2026-05-15 飞书内容工作流入口登记
+
+| Skill 名称 | 用途 | 风险等级 | 状态 |
+| --- | --- | --- | --- |
+| qiqi-feishu-workflow-entry | 沉淀飞书 webhook 内容卡片到工作台 URL 跳转的 PRD、卡片结构、URL 参数承接、V1/V2/V3 边界和后续任务拆分；仅限方案和文档，不接飞书自建应用回调。 | A/B | 已登记，暂不自动创建执行型 Skill |

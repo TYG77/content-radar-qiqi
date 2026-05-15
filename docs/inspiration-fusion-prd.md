@@ -67,3 +67,19 @@
 - 大纲阶段标注可用灵感和段落位置。
 - 正文阶段把灵感改写成自然表达，不生硬引用。
 - 语气优化阶段强化真实操盘手现场感，保留专业底线。
+
+## V1 轻量匹配 MVP
+
+- 今日选题读取 `qiqi_inspiration_pool_v1` 中未归档灵感。
+- 通过标题、描述、类型、标签、推荐用途做轻量关键词匹配。
+- 产出 `matchedInspirations`、`matchedInspirationIds`、`inspirationMatchScore`、`qiqiFitReason`、`howToUseInArticle`、`authenticityBoost`。
+- 仅做推荐辅助，不把个人观察包装成真实热点。
+- 生成大纲和正文时优先复用现有链路，在提示中带入可引用灵感。
+
+## 灵感角度提炼规则
+
+- 匹配结果不直接复述整条案例，而是先提炼可用角度。
+- 每条匹配灵感要输出：`useAngle`、`matchReason`、`articlePlacement`、`contentRole`、`suggestedExpression`、`caution`。
+- 角度优先表达“这条真实观察能支撑什么判断”，而不是“这个故事讲了什么”。
+- 如果相关度偏弱，要明确提示“可作为背景观察，不建议作为主案例”。
+- 个人观察和真实热点必须分开表述，不能把一条项目经验包装成行业普遍结论。

@@ -1,3 +1,5 @@
+import type { InspirationMatch } from "@/app/lib/inspiration";
+
 export type FitLevel = "高" | "中" | "低";
 
 export type PurposeLabel =
@@ -63,6 +65,18 @@ export type Hotspot = {
   fitPlatforms: string[];
   purposes: PurposeLabel[];
   reason: string;
+  matchedInspirationIds?: string[];
+  matchedInspirations?: InspirationMatch[];
+  inspirationMatchScore?: number;
+  qiqiFitReason?: string;
+  howToUseInArticle?: string;
+  authenticityBoost?: number;
+  conversionBridge?: string;
+  useAngle?: string;
+  articlePlacement?: string;
+  contentRole?: string;
+  suggestedExpression?: string;
+  caution?: string;
 };
 
 export type TopicSource = {
@@ -115,6 +129,19 @@ export type Topic = {
   recommendReason: string;
   scores: ScoreItem[];
   platformFits: PlatformFit[];
+  matchedInspirationIds?: string[];
+  matchedInspirations?: InspirationMatch[];
+  inspirationMatchScore?: number;
+  qiqiFitReason?: string;
+  howToUseInArticle?: string;
+  authenticityBoost?: number;
+  conversionBridge?: string;
+  articleUsePlan?: string;
+  useAngle?: string;
+  articlePlacement?: string;
+  contentRole?: string;
+  suggestedExpression?: string;
+  caution?: string;
 };
 
 export type ArticleOutline = {
@@ -266,5 +293,17 @@ export type AiRequest = {
     uploadedTextMaterials?: string;
     sources?: TopicSource[];
     rawText?: string;
+    matchedInspirationIds?: string[];
+    matchedInspirations?: InspirationMatch[];
+    inspirationMatchScore?: number;
+    qiqiFitReason?: string;
+    howToUseInArticle?: string;
+    authenticityBoost?: number;
+    conversionBridge?: string;
+    useAngle?: string;
+    articlePlacement?: string;
+    contentRole?: string;
+    suggestedExpression?: string;
+    caution?: string;
   };
 };

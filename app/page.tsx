@@ -7,6 +7,11 @@ import {
   getHotspotKeyword,
   pickReader,
 } from "@/app/lib/content-radar";
+import {
+  collectInspirationUsage,
+  matchInspirationsToHotspot,
+  type InspirationMatch,
+} from "@/app/lib/inspiration";
 import { buildWechatArticleHtml } from "@/app/lib/wechat/layout";
 
 const profileContext =
@@ -70,6 +75,18 @@ type Hotspot = {
   fitPlatforms: string[];
   purposes: PurposeLabel[];
   reason: string;
+  matchedInspirationIds?: string[];
+  matchedInspirations?: InspirationMatch[];
+  inspirationMatchScore?: number;
+  qiqiFitReason?: string;
+  howToUseInArticle?: string;
+  authenticityBoost?: number;
+  conversionBridge?: string;
+  useAngle?: string;
+  articlePlacement?: string;
+  contentRole?: string;
+  suggestedExpression?: string;
+  caution?: string;
 };
 
 type EvidenceLink = {
@@ -148,6 +165,19 @@ type Topic = {
   recommendReason: string;
   scores: ScoreItem[];
   platformFits: PlatformFit[];
+  matchedInspirationIds?: string[];
+  matchedInspirations?: InspirationMatch[];
+  inspirationMatchScore?: number;
+  qiqiFitReason?: string;
+  howToUseInArticle?: string;
+  authenticityBoost?: number;
+  conversionBridge?: string;
+  articleUsePlan?: string;
+  useAngle?: string;
+  articlePlacement?: string;
+  contentRole?: string;
+  suggestedExpression?: string;
+  caution?: string;
 };
 
 type InspirationType =
@@ -408,7 +438,7 @@ const inspirationTypes: InspirationType[] = [
 ];
 
 const inspirationStatusLabels: Record<InspirationStatus, string> = {
-  draft: "草稿",
+  draft: "待整理",
   topic_ready: "已转选题",
   outline_ready: "已转大纲",
   archived: "已归档",
@@ -558,6 +588,10 @@ export default function Home() {
   }, []);
 
   const todayDate = useMemo(() => getTodayDateLabel(), []);
+  const inspirationUsageMap = useMemo(
+    () => collectInspirationUsage(hotspots, inspirations),
+    [hotspots, inspirations],
+  );
 
   async function refreshTodayHotspots() {
     setIsRefreshingHotspots(true);
@@ -841,14 +875,19 @@ export default function Home() {
 
   async function openHotspotDetail(hotspot: Hotspot) {
     const currentHotspot = normalizeHotspotForToday(hotspot, todayDate, hotspots.indexOf(hotspot));
+    const inspirationMatch = matchInspirationsToHotspot(currentHotspot, inspirations);
+    const enrichedHotspot: Hotspot = {
+      ...currentHotspot,
+      ...inspirationMatch,
+    };
     const rawCachedAnalysis = readLocalCache<HotspotAnalysis>(
-      getHotspotAnalysisCacheKey(currentHotspot),
+      getHotspotAnalysisCacheKey(enrichedHotspot),
     );
     const cachedAnalysis = rawCachedAnalysis
-      ? normalizeHotspotAnalysis(rawCachedAnalysis, currentHotspot)
+      ? normalizeHotspotAnalysis(rawCachedAnalysis, enrichedHotspot)
       : null;
-    setSelectedHotspot(currentHotspot);
-    setSelectedAnalysis(cachedAnalysis ?? buildAnalysis(currentHotspot));
+    setSelectedHotspot(enrichedHotspot);
+    setSelectedAnalysis(cachedAnalysis ?? buildAnalysis(enrichedHotspot));
     setSelectedTopic(null);
     setSelectedContentType(null);
     setGeneratedOutline(null);
@@ -874,26 +913,33 @@ export default function Home() {
 
     const analysis = await callAi<HotspotAnalysis>("hotspotDetail", {
       hotspot: {
-        id: currentHotspot.id,
-        title: currentHotspot.title,
-        description: currentHotspot.description,
-        fit: currentHotspot.fit,
-        reason: currentHotspot.reason,
-        attentionReason: currentHotspot.attentionReason,
-        fitPlatforms: currentHotspot.fitPlatforms,
-        purposes: currentHotspot.purposes,
-        sourceMode: currentHotspot.sourceMode,
-        sourceChannel: currentHotspot.sourceChannel,
-        evidenceLinks: currentHotspot.evidenceLinks ?? [],
-        sourceEvidence: currentHotspot.sourceEvidence,
+        id: enrichedHotspot.id,
+        title: enrichedHotspot.title,
+        description: enrichedHotspot.description,
+        fit: enrichedHotspot.fit,
+        reason: enrichedHotspot.reason,
+        attentionReason: enrichedHotspot.attentionReason,
+        fitPlatforms: enrichedHotspot.fitPlatforms,
+        purposes: enrichedHotspot.purposes,
+        sourceMode: enrichedHotspot.sourceMode,
+        sourceChannel: enrichedHotspot.sourceChannel,
+        evidenceLinks: enrichedHotspot.evidenceLinks ?? [],
+        sourceEvidence: enrichedHotspot.sourceEvidence,
+        matchedInspirationIds: enrichedHotspot.matchedInspirationIds,
+        matchedInspirations: enrichedHotspot.matchedInspirations,
+        inspirationMatchScore: enrichedHotspot.inspirationMatchScore,
+        qiqiFitReason: enrichedHotspot.qiqiFitReason,
+        howToUseInArticle: enrichedHotspot.howToUseInArticle,
+        authenticityBoost: enrichedHotspot.authenticityBoost,
+        conversionBridge: enrichedHotspot.conversionBridge,
       },
       profileContext,
       qiqiWritingStyle,
     });
     if (analysis.ok) {
-      const normalizedAnalysis = normalizeHotspotAnalysis(analysis.data, currentHotspot);
+      const normalizedAnalysis = normalizeHotspotAnalysis(analysis.data, enrichedHotspot);
       setSelectedAnalysis(normalizedAnalysis);
-      writeLocalCache(getHotspotAnalysisCacheKey(currentHotspot), normalizedAnalysis);
+      writeLocalCache(getHotspotAnalysisCacheKey(enrichedHotspot), normalizedAnalysis);
       setAiStatus("AI 已完成当前选题拆解。");
     } else {
       setAiDiagnostic(toAiDiagnostic(analysis, true, lastAiConnectionOk));
@@ -902,16 +948,21 @@ export default function Home() {
   }
 
   function chooseTopic(topic: Topic) {
-    setSelectedTopic(topic);
+    const enrichedTopic = selectedHotspot
+      ? enrichTopicWithInspirationContext(topic, selectedHotspot)
+      : topic;
+    setSelectedTopic(enrichedTopic);
     setSelectedContentType(null);
     const cachedOutline = selectedHotspot
-      ? readLocalCache<ArticleOutline>(getOutlineCacheKey(selectedHotspot, topic))
+      ? readLocalCache<ArticleOutline>(getOutlineCacheKey(selectedHotspot, enrichedTopic))
       : null;
     const cachedDraft = selectedHotspot
-      ? readLocalCache<ArticleDraft>(getDraftCacheKey(selectedHotspot, topic))
+      ? readLocalCache<ArticleDraft>(getDraftCacheKey(selectedHotspot, enrichedTopic))
       : null;
     const cachedMulti = selectedHotspot
-      ? readLocalCache<MultiPlatformPlan>(getMultiPlatformCacheKey(selectedHotspot, topic, "multiPlatform"))
+      ? readLocalCache<MultiPlatformPlan>(
+          getMultiPlatformCacheKey(selectedHotspot, enrichedTopic, "multiPlatform"),
+        )
       : null;
     setGeneratedOutline(cachedOutline);
     setGeneratedDraft(cachedDraft);
@@ -1051,6 +1102,18 @@ export default function Home() {
     );
   }
 
+  function restoreInspiration(itemId: string) {
+    const now = new Date().toISOString();
+    saveInspirations(
+      inspirations.map((item) =>
+        item.id === itemId
+          ? { ...item, status: "draft", updatedAt: now }
+          : item,
+      ),
+      "已恢复为待整理灵感。",
+    );
+  }
+
   function convertInspirationToTopic(item: InspirationItem) {
     const { hotspot, topic } = buildTopicFromInspiration(item, todayDate);
     const now = new Date().toISOString();
@@ -1098,6 +1161,20 @@ export default function Home() {
         selectedAngle: selectedTopic,
         selectedContentType: "公众号文章大纲",
         userNote: outlineNote,
+        matchedInspirationIds: selectedTopic.matchedInspirationIds ?? selectedHotspot.matchedInspirationIds,
+        matchedInspirations: selectedTopic.matchedInspirations ?? selectedHotspot.matchedInspirations,
+        inspirationMatchScore:
+          selectedTopic.inspirationMatchScore ?? selectedHotspot.inspirationMatchScore,
+        qiqiFitReason: selectedTopic.qiqiFitReason ?? selectedHotspot.qiqiFitReason,
+        howToUseInArticle: selectedTopic.howToUseInArticle ?? selectedHotspot.howToUseInArticle,
+        conversionBridge: selectedTopic.conversionBridge ?? selectedHotspot.conversionBridge,
+        authenticityBoost: selectedTopic.authenticityBoost ?? selectedHotspot.authenticityBoost,
+        useAngle: selectedTopic.useAngle ?? selectedHotspot.useAngle,
+        articlePlacement: selectedTopic.articlePlacement ?? selectedHotspot.articlePlacement,
+        contentRole: selectedTopic.contentRole ?? selectedHotspot.contentRole,
+        suggestedExpression:
+          selectedTopic.suggestedExpression ?? selectedHotspot.suggestedExpression,
+        caution: selectedTopic.caution ?? selectedHotspot.caution,
       });
       if (outline.ok && hasOutlineDisplayableContent(outline.data)) {
         const normalizedOutline = normalizeArticleOutlineForDisplay(outline.data);
@@ -1144,6 +1221,20 @@ export default function Home() {
         selectedContentType: "公众号正文",
         outline,
         userNote: outlineNote,
+        matchedInspirationIds: selectedTopic.matchedInspirationIds ?? selectedHotspot.matchedInspirationIds,
+        matchedInspirations: selectedTopic.matchedInspirations ?? selectedHotspot.matchedInspirations,
+        inspirationMatchScore:
+          selectedTopic.inspirationMatchScore ?? selectedHotspot.inspirationMatchScore,
+        qiqiFitReason: selectedTopic.qiqiFitReason ?? selectedHotspot.qiqiFitReason,
+        howToUseInArticle: selectedTopic.howToUseInArticle ?? selectedHotspot.howToUseInArticle,
+        conversionBridge: selectedTopic.conversionBridge ?? selectedHotspot.conversionBridge,
+        authenticityBoost: selectedTopic.authenticityBoost ?? selectedHotspot.authenticityBoost,
+        useAngle: selectedTopic.useAngle ?? selectedHotspot.useAngle,
+        articlePlacement: selectedTopic.articlePlacement ?? selectedHotspot.articlePlacement,
+        contentRole: selectedTopic.contentRole ?? selectedHotspot.contentRole,
+        suggestedExpression:
+          selectedTopic.suggestedExpression ?? selectedHotspot.suggestedExpression,
+        caution: selectedTopic.caution ?? selectedHotspot.caution,
       });
       if (draft.ok) {
         const next = normalizeArticleDraftFromAi(draft.data);
@@ -1204,6 +1295,20 @@ export default function Home() {
         outline,
         draft: generatedDraft ?? undefined,
         userNote: styleContext,
+        matchedInspirationIds: selectedTopic.matchedInspirationIds ?? selectedHotspot.matchedInspirationIds,
+        matchedInspirations: selectedTopic.matchedInspirations ?? selectedHotspot.matchedInspirations,
+        inspirationMatchScore:
+          selectedTopic.inspirationMatchScore ?? selectedHotspot.inspirationMatchScore,
+        qiqiFitReason: selectedTopic.qiqiFitReason ?? selectedHotspot.qiqiFitReason,
+        howToUseInArticle: selectedTopic.howToUseInArticle ?? selectedHotspot.howToUseInArticle,
+        conversionBridge: selectedTopic.conversionBridge ?? selectedHotspot.conversionBridge,
+        authenticityBoost: selectedTopic.authenticityBoost ?? selectedHotspot.authenticityBoost,
+        useAngle: selectedTopic.useAngle ?? selectedHotspot.useAngle,
+        articlePlacement: selectedTopic.articlePlacement ?? selectedHotspot.articlePlacement,
+        contentRole: selectedTopic.contentRole ?? selectedHotspot.contentRole,
+        suggestedExpression:
+          selectedTopic.suggestedExpression ?? selectedHotspot.suggestedExpression,
+        caution: selectedTopic.caution ?? selectedHotspot.caution,
       });
       const fallbackDraft = buildArticleDraft(
         selectedHotspot,
@@ -1949,10 +2054,12 @@ export default function Home() {
     return (
       <InspirationPoolView
         inspirations={inspirations}
+        inspirationUsageMap={inspirationUsageMap}
         status={inspirationStatus}
         onAdd={addInspiration}
         onAnalyze={analyzeRawInspiration}
         onArchive={archiveInspiration}
+        onRestore={restoreInspiration}
         onCopy={copyInspiration}
         onDelete={deleteInspiration}
         onConvertToTopic={convertInspirationToTopic}
@@ -1964,6 +2071,8 @@ export default function Home() {
   return (
     <RadarView
       hotspots={hotspots}
+      inspirations={inspirations}
+      inspirationUsageMap={inspirationUsageMap}
       refreshStatus={hotspotRefreshStatus}
       aiDiagnostic={aiDiagnostic}
       isCheapMode={isCheapMode}
@@ -1998,6 +2107,8 @@ export default function Home() {
 
 function RadarView({
   hotspots,
+  inspirations,
+  inspirationUsageMap,
   refreshStatus,
   aiDiagnostic,
   isCheapMode,
@@ -2028,6 +2139,8 @@ function RadarView({
   onOpenHotspot,
 }: {
   hotspots: Hotspot[];
+  inspirations: InspirationItem[];
+  inspirationUsageMap: Record<string, string[]>;
   refreshStatus: string;
   aiDiagnostic: AiDiagnostic | null;
   isCheapMode: boolean;
@@ -2057,12 +2170,26 @@ function RadarView({
   onOpenInspirationPool: () => void;
   onOpenHotspot: (hotspot: Hotspot) => void;
 }) {
-  const featuredHotspots = [...hotspots]
-    .sort(
-      (left, right) =>
-        buildUnifiedTopicScore(right).totalScore - buildUnifiedTopicScore(left).totalScore,
-    )
-    .slice(0, 4);
+  const featuredHotspots = useMemo(() => {
+    return [...hotspots]
+      .map((hotspot) => {
+        const inspirationMatch = matchInspirationsToHotspot(hotspot, inspirations);
+        const matchedHotspot: Hotspot = {
+          ...hotspot,
+          ...inspirationMatch,
+          authenticityBoost:
+            Math.max(hotspot.authenticityBoost ?? 0, inspirationMatch.authenticityBoost ?? 0),
+        };
+        const homeScore = buildUnifiedTopicScore(matchedHotspot);
+        return {
+          hotspot: matchedHotspot,
+          homeScore,
+          inspirationMatch,
+        };
+      })
+      .sort((left, right) => right.homeScore.totalScore - left.homeScore.totalScore)
+      .slice(0, 4);
+  }, [hotspots, inspirations]);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showAiDiagnostic, setShowAiDiagnostic] = useState(false);
 
@@ -2159,9 +2286,13 @@ function RadarView({
           onTestFeishuPush={onTestFeishuPush}
         />
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          {featuredHotspots.map((hotspot) => {
-            const homeScore = buildUnifiedTopicScore(hotspot);
+          {featuredHotspots.map(({ hotspot, homeScore, inspirationMatch }) => {
             const sourceEvidence = buildHomeSourceEvidence(hotspot);
+            const usageTitles = Array.from(
+              new Set(
+                (hotspot.matchedInspirationIds ?? []).flatMap((id) => inspirationUsageMap[id] ?? []),
+              ),
+            );
 
             return (
               <article
@@ -2222,11 +2353,34 @@ function RadarView({
                   <strong className="text-stone-950">为什么适合陈七七：</strong>
                   {homeScore.recommendedReason}
                 </p>
+                <p className="mt-2 text-sm leading-6 text-stone-700">
+                  <strong className="text-stone-950">为什么这个选题适合七七：</strong>
+                  {hotspot.qiqiFitReason || inspirationMatch.qiqiFitReason}
+                  {hotspot.authenticityBoost ? `，真实感加成 ${hotspot.authenticityBoost} 分` : ""}
+                </p>
                 {homeScore.riskNotice ? (
                   <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800 ring-1 ring-amber-100">
                     {homeScore.riskNotice}
                   </p>
                 ) : null}
+                <div className="mt-4">
+                  <InspirationAnglePanel
+                    title="可结合的七七灵感角度"
+                    matches={hotspot.matchedInspirations ?? []}
+                    emptyText="暂无强相关灵感，可先作为外部热点观察。"
+                  />
+                  {hotspot.qiqiFitReason ? (
+                    <p className="mt-3 text-xs leading-5 text-stone-600">
+                      <strong className="text-stone-950">为什么适合七七：</strong>
+                      {hotspot.qiqiFitReason}
+                    </p>
+                  ) : null}
+                  {usageTitles.length ? (
+                    <p className="mt-2 text-xs leading-5 text-orange-900">
+                      已关联今日选题：{usageTitles.slice(0, 2).join("、")}
+                    </p>
+                  ) : null}
+                </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {hotspot.fitPlatforms.map((platform) => (
                     <Tag key={platform}>{platform}</Tag>
@@ -2257,16 +2411,19 @@ function RadarView({
 
 function InspirationPoolView({
   inspirations,
+  inspirationUsageMap,
   status,
   onAdd,
   onAnalyze,
   onArchive,
+  onRestore,
   onCopy,
   onDelete,
   onConvertToTopic,
   onBackToRadar,
 }: {
   inspirations: InspirationItem[];
+  inspirationUsageMap: Record<string, string[]>;
   status: string;
   onAdd: (input: {
     title: string;
@@ -2281,6 +2438,7 @@ function InspirationPoolView({
   }) => void;
   onAnalyze: (rawText: string) => Promise<InspirationCandidate[]>;
   onArchive: (itemId: string) => void;
+  onRestore: (itemId: string) => void;
   onCopy: (item: InspirationItem) => void;
   onDelete: (itemId: string) => void;
   onConvertToTopic: (item: InspirationItem) => void;
@@ -2293,12 +2451,14 @@ function InspirationPoolView({
   const [source, setSource] = useState("");
   const [notes, setNotes] = useState("");
   const [filterType, setFilterType] = useState<"全部" | InspirationType>("全部");
+  const [filterStatus, setFilterStatus] = useState<"全部" | InspirationStatus>("全部");
   const [showManualFields, setShowManualFields] = useState(false);
   const [candidates, setCandidates] = useState<InspirationCandidate[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const visibleInspirations = inspirations.filter((item) =>
-    filterType === "全部" ? true : item.type === filterType,
+    (filterType === "全部" ? true : item.type === filterType) &&
+    (filterStatus === "全部" ? true : item.status === filterStatus),
   );
 
   function submitInspiration() {
@@ -2518,18 +2678,34 @@ function InspirationPoolView({
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-base font-semibold text-stone-950">灵感列表</h2>
-              <select
-                value={filterType}
-                onChange={(event) => setFilterType(event.target.value as "全部" | InspirationType)}
-                className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm outline-none focus:border-orange-300"
-              >
-                <option value="全部">全部</option>
-                {inspirationTypes.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+              <div className="flex flex-wrap gap-2">
+                <select
+                  value={filterType}
+                  onChange={(event) => setFilterType(event.target.value as "全部" | InspirationType)}
+                  className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm outline-none focus:border-orange-300"
+                >
+                  <option value="全部">全部类型</option>
+                  {inspirationTypes.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filterStatus}
+                  onChange={(event) =>
+                    setFilterStatus(event.target.value as "全部" | InspirationStatus)
+                  }
+                  className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm outline-none focus:border-orange-300"
+                >
+                  <option value="全部">全部状态</option>
+                  {Object.keys(inspirationStatusLabels).map((option) => (
+                    <option key={option} value={option}>
+                      {inspirationStatusLabels[option as InspirationStatus]}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="mt-4 grid gap-4">
@@ -2545,6 +2721,11 @@ function InspirationPoolView({
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-stone-600">
                         {inspirationStatusLabels[item.status]}
                       </span>
+                      {inspirationUsageMap[item.id]?.length ? (
+                        <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-800">
+                          已关联今日选题
+                        </span>
+                      ) : null}
                     </div>
                     <h3 className="mt-3 text-lg font-semibold leading-7 text-stone-950">
                       {item.title || getInspirationFallbackTitle(item.content)}
@@ -2581,7 +2762,7 @@ function InspirationPoolView({
                         onClick={() => onCopy(item)}
                         className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-orange-50"
                       >
-                        复制灵感
+                        复制内容
                       </button>
                       <button
                         type="button"
@@ -2590,6 +2771,15 @@ function InspirationPoolView({
                       >
                         归档
                       </button>
+                      {item.status === "archived" ? (
+                        <button
+                          type="button"
+                          onClick={() => onRestore(item.id)}
+                          className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-100"
+                        >
+                          恢复为待整理
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => onDelete(item.id)}
@@ -3237,6 +3427,7 @@ function HotspotDetailView({
   const recommendLevel = unifiedScore.recommendationLevel;
   const oneSentenceJudgment =
     analysis.oneSentenceJudgment || primaryTopic.recommendReason;
+  const inspirationMatches = hotspot.matchedInspirations ?? [];
 
   return (
     <PageShell currentView="hotspotDetail">
@@ -3363,6 +3554,19 @@ function HotspotDetailView({
       </section>
       ) : null}
       <section className="rounded-lg border border-orange-100 bg-white p-5 shadow-sm">
+        <InspirationAnglePanel
+          title="可结合的七七灵感角度"
+          matches={inspirationMatches}
+          emptyText="暂无强相关灵感，可先作为外部热点观察。"
+        />
+        {hasText(hotspot.qiqiFitReason) ? (
+          <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm leading-6 text-stone-700 ring-1 ring-slate-200">
+            <strong className="text-stone-950">为什么适合七七：</strong>
+            {hotspot.qiqiFitReason}
+          </p>
+        ) : null}
+      </section>
+      <section className="rounded-lg border border-orange-100 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-stone-950">这篇内容怎么写</h2>
         {hasWritingPlanContent ? (
           <>
@@ -3487,6 +3691,7 @@ function ContentTypeSelectView({
 
   const angleTitle = hasText(topic.title) ? topic.title : "当前切入角度";
   const purposeLabel = topic.purpose ?? "—";
+  const inspirationMatches = topic.matchedInspirations ?? hotspot.matchedInspirations ?? [];
 
   return (
     <PageShell currentView="contentTypeSelect">
@@ -3506,6 +3711,13 @@ function ContentTypeSelectView({
           />
           <InfoBox label="内容目的标签" value={purposeLabel} />
         </div>
+      </section>
+      <section className="rounded-lg border border-orange-100 bg-white p-5 shadow-sm">
+        <InspirationAnglePanel
+          title="可结合的七七灵感角度"
+          matches={inspirationMatches}
+          emptyText="暂无强相关灵感，可先作为外部热点观察。"
+        />
       </section>
       <section className="rounded-lg border border-orange-100 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-stone-950">选择要生成的内容形态</h2>
@@ -3571,6 +3783,7 @@ function ArticleOutlineView({
 }) {
   const outlineReady =
     outlineGenPhase === "success" && outline && hasOutlineDisplayableContent(outline);
+  const inspirationMatches = topic.matchedInspirations ?? hotspot.matchedInspirations ?? [];
 
   return (
     <PageShell currentView="articleOutline">
@@ -3581,6 +3794,13 @@ function ArticleOutlineView({
         subtitle="先把观点、证据和承接路径排清楚，再进入正文生成。"
       />
       <SelectionSummary hotspot={hotspot} topic={topic} mainPlatform="公众号" />
+      <section className="rounded-lg border border-orange-100 bg-white p-5 shadow-sm">
+        <InspirationAnglePanel
+          title="可结合的七七灵感角度"
+          matches={inspirationMatches}
+          emptyText="暂无强相关灵感，可先作为外部热点观察。"
+        />
+      </section>
       <div className="mt-4 space-y-3">
         <ContentGenerationStatusBanner
           phase={outlineGenPhase}
@@ -6455,6 +6675,58 @@ function PurposeTag({ children }: { children: React.ReactNode }) {
   );
 }
 
+function InspirationAnglePanel({
+  title,
+  matches,
+  emptyText = "暂无强相关灵感，可先作为外部热点观察。",
+}: {
+  title: string;
+  matches: InspirationMatch[];
+  emptyText?: string;
+}) {
+  return (
+    <div className="rounded-lg bg-orange-50 p-3 ring-1 ring-orange-100">
+      <p className="text-sm font-semibold text-stone-950">{title}</p>
+      {matches.length ? (
+        <div className="mt-3 grid gap-3">
+          {matches.map((match) => (
+            <div key={match.id} className="rounded-lg bg-white p-3 text-xs leading-5 text-stone-700 ring-1 ring-orange-100">
+              <p className="text-sm font-semibold text-stone-950">{match.title}</p>
+              <p className="mt-1 text-stone-600">{match.summary}</p>
+              <p className="mt-1 text-stone-700">
+                <strong className="text-stone-950">可用角度：</strong>
+                {match.useAngle}
+              </p>
+              <p className="mt-1 text-stone-700">
+                <strong className="text-stone-950">为什么适合这个选题：</strong>
+                {match.matchReason}
+              </p>
+              <p className="mt-1 text-stone-700">
+                <strong className="text-stone-950">建议放在文章哪里：</strong>
+                {match.articlePlacement}
+              </p>
+              <p className="mt-1 text-stone-700">
+                <strong className="text-stone-950">文章作用：</strong>
+                {match.contentRole}
+              </p>
+              <p className="mt-1 text-stone-700">
+                <strong className="text-stone-950">建议表达：</strong>
+                {match.suggestedExpression}
+              </p>
+              <p className="mt-1 text-stone-700">
+                <strong className="text-stone-950">注意事项：</strong>
+                {match.caution}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-sm leading-6 text-stone-600">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
 function FitTag({
   fit,
   children,
@@ -6720,6 +6992,62 @@ function buildTopicFromInspiration(item: InspirationItem, todayDate: string) {
   return { hotspot, topic };
 }
 
+function enrichTopicWithInspirationContext(topic: Topic, hotspot: Hotspot): Topic {
+  const inspirationMatches = hotspot.matchedInspirations ?? [];
+  if (!inspirationMatches.length) {
+    return {
+      ...topic,
+      matchedInspirationIds: hotspot.matchedInspirationIds,
+      matchedInspirations: hotspot.matchedInspirations,
+      inspirationMatchScore: hotspot.inspirationMatchScore,
+      qiqiFitReason: hotspot.qiqiFitReason,
+      howToUseInArticle: hotspot.howToUseInArticle,
+      authenticityBoost: hotspot.authenticityBoost,
+      conversionBridge: hotspot.conversionBridge,
+      useAngle: hotspot.useAngle,
+      articlePlacement: hotspot.articlePlacement,
+      contentRole: hotspot.contentRole,
+      suggestedExpression: hotspot.suggestedExpression,
+      caution: hotspot.caution,
+    };
+  }
+
+  const angleLines = inspirationMatches
+    .map((match) => `${match.title}：${match.useAngle}`)
+    .slice(0, 3)
+    .join("；");
+  const placementLines = inspirationMatches
+    .map((match) => `${match.articlePlacement} / ${match.contentRole}`)
+    .slice(0, 3)
+    .join("；");
+
+  return {
+    ...topic,
+    matchedInspirationIds: hotspot.matchedInspirationIds,
+    matchedInspirations: inspirationMatches,
+    inspirationMatchScore: hotspot.inspirationMatchScore,
+    qiqiFitReason: hotspot.qiqiFitReason,
+    howToUseInArticle: placementLines || hotspot.howToUseInArticle,
+    authenticityBoost: hotspot.authenticityBoost,
+    conversionBridge: hotspot.conversionBridge,
+    useAngle: angleLines || hotspot.useAngle,
+    articlePlacement: hotspot.articlePlacement,
+    contentRole: hotspot.contentRole,
+    suggestedExpression: hotspot.suggestedExpression,
+    caution: hotspot.caution,
+  };
+}
+
+function formatInspirationLines(topic: Topic, hotspot: Hotspot) {
+  const matches = topic.matchedInspirations ?? hotspot.matchedInspirations ?? [];
+  if (!matches.length) return "";
+  const lines = matches
+    .slice(0, 3)
+    .map((match) => `${match.title}（${match.useAngle}）`)
+    .join("；");
+  return ` 可引用灵感：${lines}。`;
+}
+
 function getPurposesByInspirationType(type: InspirationType): PurposeLabel[] {
   if (type === "客户沟通" || type === "私域转化话题") return ["专业信任", "私域引流"];
   if (type === "私域运营" || type === "IP操盘") return ["方法论沉淀", "商业转化"];
@@ -6759,6 +7087,7 @@ function buildUnifiedTopicScore(hotspot: Hotspot, topicIndex = 0) {
   const platformCount = platforms.length;
   const sourceBonus = hotspot.sourceCredibility === "高" ? 1 : hotspot.sourceCredibility === "中" ? 0.5 : 0;
   const baseFit = hotspot.fit === "高" ? 8 : hotspot.fit === "中" ? 6 : 4;
+  const inspirationBoost = hotspot.authenticityBoost ?? 0;
 
   const scores = [
     {
@@ -6794,7 +7123,7 @@ function buildUnifiedTopicScore(hotspot: Hotspot, topicIndex = 0) {
   ];
   const rawTotal = Math.round(scores.reduce((sum, item) => sum + item.value, 0) / scores.length * 10);
   const stableOffset = getStableScoreOffset(hotspot, topicIndex);
-  const totalScore = clampScore(rawTotal + stableOffset, 60);
+  const totalScore = clampScore(rawTotal + stableOffset + inspirationBoost, 60);
   const recommendationLevel = getRecommendationLevelByScore(totalScore);
   const strongest = [...scores].sort((a, b) => b.value - a.value)[0]?.label ?? "身份匹配度";
   const weakest = [...scores].sort((a, b) => a.value - b.value)[0];
@@ -6805,7 +7134,10 @@ function buildUnifiedTopicScore(hotspot: Hotspot, topicIndex = 0) {
     recommendationLevel,
     scores,
     scoreReasons: scores,
-    recommendedReason: `${strongest}较强，适合先判断是否能沉淀成陈七七的专业观点和私域承接方法。`,
+    recommendedReason:
+      inspirationBoost > 0
+        ? `${strongest}较强，且已有七七真实灵感支撑，适合先判断是否能沉淀成陈七七的专业观点和私域承接方法。`
+        : `${strongest}较强，适合先判断是否能沉淀成陈七七的专业观点和私域承接方法。`,
     riskNotice: weakest && weakest.value <= 6 ? `风险提醒：${weakest.label}偏弱，写作时需要补足具体场景和判断。` : "",
   };
 }
@@ -7154,13 +7486,16 @@ function buildArticleOutline(
   const noteText = note.trim()
     ? `同时回应你的补充方向：${note.trim()}`
     : "同时保持陈七七一贯的专业判断和操盘视角。";
+  const inspirationLines = formatInspirationLines(topic, hotspot);
+  const angleHint = topic.useAngle ? ` 这条灵感可用角度：${topic.useAngle}` : "";
+  const placementHint = topic.articlePlacement ? ` 建议位置：${topic.articlePlacement}` : "";
 
   return {
     title: `${topic.title}：陈七七的大健康 IP 判断`,
     sections: [
       {
         label: "如何引入这个热点",
-        text: `从「${hotspot.title}」切入，写出这个现象为什么最近会被大健康从业者反复看见。${noteText}`,
+        text: `从「${hotspot.title}」切入，写出这个现象为什么最近会被大健康从业者反复看见。${inspirationLines}${angleHint}${placementHint}${noteText}`,
       },
       {
         label: "这个现象说明了什么",
@@ -7172,11 +7507,11 @@ function buildArticleOutline(
       },
       {
         label: "陈七七的核心判断",
-        text: `围绕「${topic.title}」提出判断：${topic.angle}这才是大健康 IP 真正需要补上的能力。`,
+        text: `围绕「${topic.title}」提出判断：${topic.angle}这才是大健康 IP 真正需要补上的能力。${topic.qiqiFitReason ? ` 其中可以直接借用七七真实灵感：${topic.qiqiFitReason}` : ""}${topic.contentRole ? ` 文章作用优先按：${topic.contentRole}` : ""}`,
       },
       {
         label: "大健康 IP 可以怎么做",
-        text: "给出行动路径：判断热点适配度，提炼公众号观点，设计私域承接，再把内容接到服务和发售，并自然回到专业信任、私域连接或进一步咨询。",
+        text: `给出行动路径：判断热点适配度，提炼公众号观点，设计私域承接，再把内容接到服务和发售，并自然回到专业信任、私域连接或进一步咨询。${topic.howToUseInArticle ? ` 文章里建议使用：${topic.howToUseInArticle}` : ""}${topic.suggestedExpression ? ` 建议表达：${topic.suggestedExpression}` : ""}${topic.caution ? ` 注意事项：${topic.caution}` : ""}`,
       },
     ],
     keywords: ["热点适配判断", "专业信任建立", "私域承接路径", "课程发售闭环", "AI工具边界"],
@@ -7209,6 +7544,9 @@ function buildArticleDraft(
   const noteText = note
     ? `你补充的方向我也会放进去，尤其是：${cleanNote}。`
     : "我会尽量把专业判断、私域承接和长期信任放在一起讲。";
+  const inspirationLines = formatInspirationLines(topic, hotspot);
+  const angleHint = topic.useAngle ? ` 这条灵感可用角度：${topic.useAngle}。` : "";
+  const placementHint = topic.articlePlacement ? ` 建议位置：${topic.articlePlacement}。` : "";
   const realExpressionParagraph = wantsMoreReal
     ? "如果说得再直白一点，我不想把这篇写成一篇看起来很完整、但读完没有人的文章。七七的内容应该有自己的判断、有项目里的真实观察，也要让读者感觉到：这是一个真的陪大健康从业者跑过内容和私域闭环的人在说话。"
     : "健康内容背后，本质上还是信任。用户愿不愿意相信你，不是因为你用了最新的工具，而是因为他能不能从你的表达里感受到：你懂专业，也懂他真实卡在哪里。";
@@ -7216,7 +7554,7 @@ function buildArticleDraft(
   return {
     status: "已生成正文",
     title: outline.title,
-    intro: `${openingName}我是一名大健康行业 IP 操盘手，也是一名女性营养师。最近我越来越明显地感觉到，很多大健康从业者不是不努力做内容，而是越做越像在追热点。看到「${hotspot.title}」这个现象时，我第一反应不是它有多热，而是它背后暴露了一个很现实的问题：专业内容、用户信任和商业闭环，不能再被拆开看了。${tone}${noteText}`,
+    intro: `${openingName}我是一名大健康行业 IP 操盘手，也是一名女性营养师。最近我越来越明显地感觉到，很多大健康从业者不是不努力做内容，而是越做越像在追热点。看到「${hotspot.title}」这个现象时，我第一反应不是它有多热，而是它背后暴露了一个很现实的问题：专业内容、用户信任和商业闭环，不能再被拆开看了。${inspirationLines}${angleHint}${placementHint}${tone}${noteText}`,
     sections: [
       {
         heading: "01 AI 工具越热，大健康 IP 越不能丢掉判断力",

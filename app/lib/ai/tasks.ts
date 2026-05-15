@@ -20,6 +20,7 @@ import type {
   ArticleOutline,
   Hotspot,
   HotspotAnalysis,
+  InspirationAnalysisResult,
   MultiPlatformPlan,
   TopicSource,
 } from "./schemas";
@@ -225,6 +226,43 @@ const multiPlatformSchema = namedSchema("multi_platform_plan", {
 const xiaohongshuOnlySchema = { name: "xiaohongshu_content", schema: xiaohongshuSchema };
 const videoOnlySchema = { name: "video_script", schema: videoSchema };
 const articleDraftMaxTokens = 7000;
+const inspirationTypeEnum = {
+  type: "string",
+  enum: [
+    "客户沟通",
+    "行业观察",
+    "女性健康",
+    "私域运营",
+    "IP操盘",
+    "短视频选题",
+    "公众号切入点",
+    "金句片段",
+    "AI工具观察",
+    "私域转化话题",
+    "其他",
+  ],
+};
+const inspirationRecommendedUseEnum = {
+  type: "string",
+  enum: ["公众号选题", "短视频口播", "小红书图文", "朋友圈观点", "私域素材", "暂存观察"],
+};
+const inspirationCandidateSchema = objectSchema({
+  title: stringSchema,
+  content: stringSchema,
+  type: inspirationTypeEnum,
+  tags: stringArraySchema,
+  source: stringSchema,
+  summary: stringSchema,
+  recommendedUse: inspirationRecommendedUseEnum,
+  reason: stringSchema,
+  status: { type: "string", enum: ["draft"] },
+});
+const inspirationAnalysisSchema = namedSchema("inspiration_analysis", {
+  inspirations: {
+    type: "array",
+    items: inspirationCandidateSchema,
+  },
+});
 
 export async function runAiTask(request: AiRequest) {
   const prompt = buildPrompt(request.task, request.payload);
@@ -324,6 +362,29 @@ export async function runAiTask(request: AiRequest) {
     return searchResult.items
       .slice(0, 5)
       .map((source, index) => normalizeSearchSource(source, searchConfig.providerLabel, index));
+  }
+
+  if (request.task === "inspirationAnalyze") {
+    const rawText = stringValue(request.payload.rawText, "");
+    if (!rawText.trim()) {
+      throw new AiTaskError({
+        code: "INSPIRATION_INPUT_EMPTY",
+        message: "请先写下原始灵感。",
+      });
+    }
+
+    const result = await generateJsonWithAi<InspirationAnalysisResult>({
+      prompt: `${prompt}
+
+请把用户输入的原始灵感文本拆分成 1-5 条可入池的内容灵感。
+每条必须包含 title、content、type、tags、source、summary、recommendedUse、reason、status。
+type 必须从允许分类中选择；recommendedUse 必须从允许用途中选择；status 固定 draft。
+不要把个人观察包装成真实平台热点。没有明确来源时，source 写“个人观察 / 待验证”。
+顶层必须是 {"inspirations":[...]}。`,
+      schema: inspirationAnalysisSchema,
+    });
+
+    return normalizeInspirationAnalysisResult(result, rawText);
   }
 
   if (request.task === "generateHotspotsFromSources") {
@@ -565,6 +626,95 @@ function normalizeGeneratedHotspot(
     purposes: stringArrayValue(hotspot.purposes, ["观点表达", "专业信任"]) as Hotspot["purposes"],
     reason: stringValue(hotspot.reason, description),
   };
+}
+
+function normalizeInspirationAnalysisResult(
+  result: Partial<InspirationAnalysisResult> | unknown,
+  rawText: string,
+): InspirationAnalysisResult {
+  const root =
+    result && typeof result === "object" && !Array.isArray(result)
+      ? (result as Partial<InspirationAnalysisResult>)
+      : {};
+  const items = Array.isArray(root.inspirations) ? root.inspirations : [];
+  const inspirations = items
+    .filter((item) => typeof item?.content === "string" && item.content.trim())
+    .slice(0, 5)
+    .map((item, index) => {
+      const content = stringValue(item.content, rawText).trim();
+      const title = stringValue(item.title, inferInspirationTitle(content, index));
+      return {
+        title,
+        content,
+        type: normalizeInspirationType(item.type),
+        tags: stringArrayValue(item.tags, []).slice(0, 8),
+        source: stringValue(item.source, "个人观察 / 待验证"),
+        summary: stringValue(item.summary, content.slice(0, 80)),
+        recommendedUse: normalizeInspirationRecommendedUse(item.recommendedUse),
+        reason: stringValue(item.reason, "根据原始灵感语义自动整理，来源仍需人工确认。"),
+        status: "draft" as const,
+      };
+    });
+
+  if (!inspirations.length) {
+    const content = rawText.trim();
+    inspirations.push({
+      title: inferInspirationTitle(content, 0),
+      content,
+      type: "其他",
+      tags: ["待整理"],
+      source: "个人观察 / 待验证",
+      summary: content.slice(0, 80),
+      recommendedUse: "暂存观察",
+      reason: "AI 未能稳定拆分，已保留为一条原始灵感。",
+      status: "draft",
+    });
+  }
+
+  return { inspirations };
+}
+
+function inferInspirationTitle(content: string, index: number) {
+  const firstLine = content.split(/\r?\n/).find((line) => line.trim())?.trim();
+  if (firstLine) return firstLine.length > 24 ? `${firstLine.slice(0, 24)}...` : firstLine;
+  return `灵感线索 ${index + 1}`;
+}
+
+function normalizeInspirationType(value: unknown): InspirationAnalysisResult["inspirations"][number]["type"] {
+  const allowed: InspirationAnalysisResult["inspirations"][number]["type"][] = [
+    "客户沟通",
+    "行业观察",
+    "女性健康",
+    "私域运营",
+    "IP操盘",
+    "短视频选题",
+    "公众号切入点",
+    "金句片段",
+    "AI工具观察",
+    "私域转化话题",
+    "其他",
+  ];
+  return typeof value === "string" &&
+    allowed.includes(value as InspirationAnalysisResult["inspirations"][number]["type"])
+    ? (value as InspirationAnalysisResult["inspirations"][number]["type"])
+    : "其他";
+}
+
+function normalizeInspirationRecommendedUse(
+  value: unknown,
+): InspirationAnalysisResult["inspirations"][number]["recommendedUse"] {
+  const allowed: InspirationAnalysisResult["inspirations"][number]["recommendedUse"][] = [
+    "公众号选题",
+    "短视频口播",
+    "小红书图文",
+    "朋友圈观点",
+    "私域素材",
+    "暂存观察",
+  ];
+  return typeof value === "string" &&
+    allowed.includes(value as InspirationAnalysisResult["inspirations"][number]["recommendedUse"])
+    ? (value as InspirationAnalysisResult["inspirations"][number]["recommendedUse"])
+    : "暂存观察";
 }
 
 function buildSourceEvidenceSummary(sources: TopicSource[]) {

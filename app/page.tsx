@@ -16,6 +16,7 @@ const qiqiWritingStyle =
   "陈七七77 的公众号正文要像真实创作者表达：可以用 hi，我是七七 开头，带关系感和行业情绪；语言口语化、真诚、有判断，不像报告或 PPT；内容要体现大健康 IP 操盘手、女性健康管理师、热爱生活、喜欢摄影、做自流量创业咨询的复合视角；要加入项目观察和真实感案例，反对虚假人设、只追流量、只追工具和过度自动化；不要写学员、带班、教大家、你必须；小标题要像公众号文章，结尾自然引导关注和链接。";
 
 type View =
+  | "inspiration"
   | "radar"
   | "hotspotDetail"
   | "contentTypeSelect"
@@ -149,6 +150,56 @@ type Topic = {
   platformFits: PlatformFit[];
 };
 
+type InspirationType =
+  | "客户沟通"
+  | "行业观察"
+  | "女性健康"
+  | "私域运营"
+  | "IP操盘"
+  | "短视频选题"
+  | "公众号切入点"
+  | "金句片段"
+  | "AI工具观察"
+  | "私域转化话题"
+  | "其他";
+
+type InspirationStatus = "draft" | "topic_ready" | "outline_ready" | "archived";
+type InspirationRecommendedUse =
+  | "公众号选题"
+  | "短视频口播"
+  | "小红书图文"
+  | "朋友圈观点"
+  | "私域素材"
+  | "暂存观察";
+
+type InspirationItem = {
+  id: string;
+  title: string;
+  content: string;
+  type: InspirationType;
+  tags: string[];
+  source: string;
+  notes: string;
+  summary: string;
+  recommendedUse: InspirationRecommendedUse;
+  reason: string;
+  createdAt: string;
+  updatedAt: string;
+  status: InspirationStatus;
+};
+
+type InspirationCandidate = {
+  title: string;
+  content: string;
+  type: InspirationType;
+  tags: string[];
+  source: string;
+  summary: string;
+  recommendedUse: InspirationRecommendedUse;
+  reason: string;
+  status: "draft";
+};
+
 type RecommendationLevel = "优先写" | "可作为延展" | "暂缓观察" | "不建议优先" | "暂缓";
 
 type ArticleOutline = {
@@ -235,7 +286,8 @@ type AiTask =
   | "generateMoments"
   | "generateMultiPlatform"
   | "optimizeXiaohongshu"
-  | "optimizeVideoScript";
+  | "optimizeVideoScript"
+  | "inspirationAnalyze";
 
 type AiApiError = {
   code: string;
@@ -339,7 +391,40 @@ type WindowWithSpeechRecognition = Window &
 
 const mockHotspots: Hotspot[] = getDefaultContentRadarHotspots();
 
+const INSPIRATION_STORAGE_KEY = "qiqi_inspiration_pool_v1";
+
+const inspirationTypes: InspirationType[] = [
+  "客户沟通",
+  "行业观察",
+  "女性健康",
+  "私域运营",
+  "IP操盘",
+  "短视频选题",
+  "公众号切入点",
+  "金句片段",
+  "AI工具观察",
+  "私域转化话题",
+  "其他",
+];
+
+const inspirationStatusLabels: Record<InspirationStatus, string> = {
+  draft: "草稿",
+  topic_ready: "已转选题",
+  outline_ready: "已转大纲",
+  archived: "已归档",
+};
+
+const inspirationRecommendedUses: InspirationRecommendedUse[] = [
+  "公众号选题",
+  "短视频口播",
+  "小红书图文",
+  "朋友圈观点",
+  "私域素材",
+  "暂存观察",
+];
+
 const workflowSteps: { view: View; label: string; short: string }[] = [
+  { view: "inspiration", label: "七七灵感池", short: "灵感" },
   { view: "radar", label: "热点雷达", short: "雷达" },
   { view: "hotspotDetail", label: "选题拆解", short: "拆解" },
   { view: "contentTypeSelect", label: "内容形态", short: "形态" },
@@ -354,6 +439,8 @@ export default function Home() {
   const [hotspots, setHotspots] = useState<Hotspot[]>(mockHotspots);
   const [sourcePool, setSourcePool] = useState<TopicSource[]>([]);
   const [sourceManagerStatus, setSourceManagerStatus] = useState("");
+  const [inspirations, setInspirations] = useState<InspirationItem[]>([]);
+  const [inspirationStatus, setInspirationStatus] = useState("");
   const [isGeneratingFromSources, setIsGeneratingFromSources] = useState(false);
   const [isPushingFeishu, setIsPushingFeishu] = useState(false);
   const [feishuPushStatus, setFeishuPushStatus] = useState("");
@@ -441,6 +528,11 @@ export default function Home() {
       const cachedSources = readLocalCache<TopicSource[]>(getTodaySourcesCacheKey());
       if (cachedSources?.length) {
         setSourcePool(cachedSources);
+      }
+
+      const cachedInspirations = readLocalCache<InspirationItem[]>(INSPIRATION_STORAGE_KEY);
+      if (cachedInspirations?.length) {
+        setInspirations(normalizeInspirations(cachedInspirations));
       }
 
       const cachedConnection = readLocalCache<{ ok: boolean; model: string }>(
@@ -848,6 +940,149 @@ export default function Home() {
     } else {
       setCarrierGenByType({});
     }
+    setView("contentTypeSelect");
+  }
+
+  function saveInspirations(nextInspirations: InspirationItem[], status: string) {
+    setInspirations(nextInspirations);
+    writeLocalCache(INSPIRATION_STORAGE_KEY, nextInspirations);
+    setInspirationStatus(status);
+  }
+
+  function addInspiration(input: {
+    title: string;
+    content: string;
+    type: InspirationType;
+    tags: string | string[];
+    source: string;
+    notes: string;
+    summary?: string;
+    recommendedUse?: InspirationRecommendedUse;
+    reason?: string;
+  }) {
+    const content = input.content.trim();
+    if (!content) {
+      setInspirationStatus("请先填写灵感内容。");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const item: InspirationItem = {
+      id: `inspiration-${Date.now()}`,
+      title: input.title.trim(),
+      content,
+      type: input.type,
+      tags: Array.isArray(input.tags) ? input.tags.slice(0, 8) : parseInspirationTags(input.tags),
+      source: input.source.trim(),
+      notes: input.notes.trim(),
+      summary: input.summary?.trim() || getInspirationSummary(content),
+      recommendedUse: normalizeRecommendedUse(input.recommendedUse),
+      reason: input.reason?.trim() || "手动保存，暂未进行 AI 拆分。",
+      createdAt: now,
+      updatedAt: now,
+      status: "draft",
+    };
+
+    saveInspirations([item, ...inspirations], "已保存到灵感池。");
+  }
+
+  async function analyzeRawInspiration(rawText: string): Promise<InspirationCandidate[]> {
+    const text = rawText.trim();
+    if (!text) {
+      setInspirationStatus("请先写下原始灵感。");
+      return [];
+    }
+
+    setInspirationStatus("正在拆分灵感……");
+    const result = await callAi<{ inspirations?: InspirationCandidate[] } | InspirationCandidate[]>(
+      "inspirationAnalyze",
+      {
+        rawText: text,
+        profileContext,
+      },
+      { timeoutMs: 45000 },
+    );
+
+    if (!result.ok) {
+      setAiDiagnostic(toAiDiagnostic(result, true, lastAiConnectionOk));
+      setInspirationStatus("AI 暂时没有整理成功，原始输入已保留，可先手动保存一条灵感。");
+      return [];
+    }
+
+    const candidates = normalizeInspirationCandidates(result.data);
+    if (!candidates.length) {
+      setInspirationStatus("AI 没有拆出可用灵感，可先手动保存一条灵感。");
+      return [];
+    }
+
+    setInspirationStatus(`已拆出 ${candidates.length} 条待确认灵感。`);
+    return candidates;
+  }
+
+  function copyInspiration(item: InspirationItem) {
+    const content = formatInspirationForCopy(item);
+    if (navigator.clipboard) {
+      void navigator.clipboard
+        .writeText(content)
+        .then(() => setInspirationStatus("已复制灵感内容。"))
+        .catch(() => setInspirationStatus("复制内容已准备好，请手动复制。"));
+      return;
+    }
+
+    setInspirationStatus("复制内容已准备好，请手动复制。");
+  }
+
+  function deleteInspiration(itemId: string) {
+    saveInspirations(
+      inspirations.filter((item) => item.id !== itemId),
+      "已从灵感池删除。",
+    );
+  }
+
+  function archiveInspiration(itemId: string) {
+    const now = new Date().toISOString();
+    saveInspirations(
+      inspirations.map((item) =>
+        item.id === itemId
+          ? { ...item, status: "archived", updatedAt: now }
+          : item,
+      ),
+      "已归档这条灵感。",
+    );
+  }
+
+  function convertInspirationToTopic(item: InspirationItem) {
+    const { hotspot, topic } = buildTopicFromInspiration(item, todayDate);
+    const now = new Date().toISOString();
+    saveInspirations(
+      inspirations.map((current) =>
+        current.id === item.id
+          ? { ...current, status: "topic_ready", updatedAt: now }
+          : current,
+      ),
+      "已将该灵感转为公众号选题，可继续生成大纲或正文。",
+    );
+    setSelectedHotspot(hotspot);
+    setSelectedAnalysis(buildAnalysis(hotspot));
+    setSelectedTopic(topic);
+    setSelectedContentType(null);
+    setGeneratedOutline(null);
+    setGeneratedDraft(null);
+    setGeneratedMultiPlatformPlan(null);
+    setOutlineNote(item.notes);
+    setDraftNote("");
+    setDraftOptimizeStatus("");
+    setPublishStatus("");
+    setShowXiaohongshuDesign(false);
+    setXiaohongshuNote("");
+    setXiaohongshuStatus("");
+    setVideoNote("");
+    setVideoStatus("");
+    setMomentsStatus("");
+    setOutlineGenPhase("not_started");
+    setIsGeneratingDraft(false);
+    setCarrierGenByType({});
+    setAiStatus("已将该灵感转为公众号选题，可继续生成大纲或正文。");
     setView("contentTypeSelect");
   }
 
@@ -1710,6 +1945,22 @@ export default function Home() {
     );
   }
 
+  if (view === "inspiration") {
+    return (
+      <InspirationPoolView
+        inspirations={inspirations}
+        status={inspirationStatus}
+        onAdd={addInspiration}
+        onAnalyze={analyzeRawInspiration}
+        onArchive={archiveInspiration}
+        onCopy={copyInspiration}
+        onDelete={deleteInspiration}
+        onConvertToTopic={convertInspirationToTopic}
+        onBackToRadar={() => setView("radar")}
+      />
+    );
+  }
+
   return (
     <RadarView
       hotspots={hotspots}
@@ -1739,6 +1990,7 @@ export default function Home() {
       onTestAiConnection={testAiConnection}
       onTestFeishuPush={testFeishuPush}
       onUseCache={useCachedTodayHotspots}
+      onOpenInspirationPool={() => setView("inspiration")}
       onOpenHotspot={openHotspotDetail}
     />
   );
@@ -1772,6 +2024,7 @@ function RadarView({
   onTestAiConnection,
   onTestFeishuPush,
   onUseCache,
+  onOpenInspirationPool,
   onOpenHotspot,
 }: {
   hotspots: Hotspot[];
@@ -1801,6 +2054,7 @@ function RadarView({
   onTestAiConnection: () => void;
   onTestFeishuPush: () => void;
   onUseCache: () => void;
+  onOpenInspirationPool: () => void;
   onOpenHotspot: (hotspot: Hotspot) => void;
 }) {
   const featuredHotspots = [...hotspots]
@@ -1848,6 +2102,13 @@ function RadarView({
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={onOpenInspirationPool}
+              className="rounded-lg border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-orange-800 transition hover:bg-orange-50"
+            >
+              七七灵感池
+            </button>
             <button
               type="button"
               onClick={handleRefreshClick}
@@ -1991,6 +2252,477 @@ function RadarView({
         </div>
       </section>
     </PageShell>
+  );
+}
+
+function InspirationPoolView({
+  inspirations,
+  status,
+  onAdd,
+  onAnalyze,
+  onArchive,
+  onCopy,
+  onDelete,
+  onConvertToTopic,
+  onBackToRadar,
+}: {
+  inspirations: InspirationItem[];
+  status: string;
+  onAdd: (input: {
+    title: string;
+    content: string;
+    type: InspirationType;
+    tags: string | string[];
+    source: string;
+    notes: string;
+    summary?: string;
+    recommendedUse?: InspirationRecommendedUse;
+    reason?: string;
+  }) => void;
+  onAnalyze: (rawText: string) => Promise<InspirationCandidate[]>;
+  onArchive: (itemId: string) => void;
+  onCopy: (item: InspirationItem) => void;
+  onDelete: (itemId: string) => void;
+  onConvertToTopic: (item: InspirationItem) => void;
+  onBackToRadar: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [rawText, setRawText] = useState("");
+  const [type, setType] = useState<InspirationType>("客户沟通");
+  const [tags, setTags] = useState("");
+  const [source, setSource] = useState("");
+  const [notes, setNotes] = useState("");
+  const [filterType, setFilterType] = useState<"全部" | InspirationType>("全部");
+  const [showManualFields, setShowManualFields] = useState(false);
+  const [candidates, setCandidates] = useState<InspirationCandidate[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const visibleInspirations = inspirations.filter((item) =>
+    filterType === "全部" ? true : item.type === filterType,
+  );
+
+  function submitInspiration() {
+    onAdd({
+      title,
+      content: rawText,
+      type,
+      tags,
+      source: source || "个人观察 / 待验证",
+      notes,
+      recommendedUse: "暂存观察",
+      reason: "手动保存一条原始灵感，后续可再整理。",
+    });
+    if (!rawText.trim()) return;
+    setTitle("");
+    setRawText("");
+    setTags("");
+    setSource("");
+    setNotes("");
+  }
+
+  async function analyzeInspiration() {
+    if (isAnalyzing) return;
+    setIsAnalyzing(true);
+    try {
+      const nextCandidates = await onAnalyze(rawText);
+      if (nextCandidates.length) setCandidates(nextCandidates);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
+
+  function confirmCandidate(candidate: InspirationCandidate, index: number) {
+    onAdd({
+      ...candidate,
+      notes: candidate.reason,
+    });
+    setCandidates((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  }
+
+  function confirmAllCandidates() {
+    candidates.forEach((candidate) => {
+      onAdd({
+        ...candidate,
+        notes: candidate.reason,
+      });
+    });
+    setCandidates([]);
+  }
+
+  function updateCandidate(index: number, patch: Partial<InspirationCandidate>) {
+    setCandidates((current) =>
+      current.map((candidate, currentIndex) =>
+        currentIndex === index ? { ...candidate, ...patch } : candidate,
+      ),
+    );
+  }
+
+  return (
+    <PageShell currentView="inspiration">
+      <section className="rounded-lg border border-orange-100 bg-white p-6 shadow-sm sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">
+              Inspiration Pool
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold leading-tight text-stone-950 sm:text-4xl">
+              七七灵感池
+            </h1>
+            <p className="mt-3 text-base leading-7 text-stone-600">
+              把你的日常观察、客户聊天、项目复盘、内容想法先丢进来，AI 会帮你拆成可写的选题线索。
+            </p>
+            {status ? (
+              <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800 ring-1 ring-amber-100">
+                {status}
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={onBackToRadar}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 shadow-sm hover:bg-orange-50"
+          >
+            返回今日选题
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.3fr)]">
+          <div className="rounded-lg border border-orange-100 bg-orange-50/60 p-4">
+            <h2 className="text-base font-semibold text-stone-950">今天有什么灵感？</h2>
+            <p className="mt-2 text-sm leading-6 text-stone-600">
+              你不用先想标题、分类和标签，AI 会帮你自动整理。
+            </p>
+            <div className="mt-4 grid gap-3">
+              <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                原始灵感
+                <textarea
+                  value={rawText}
+                  onChange={(event) => setRawText(event.target.value)}
+                  rows={9}
+                  placeholder="可以直接写一整段：客户聊天记录、项目复盘、你突然想到的观点、行业观察、短视频想法、公众号切入点……不用整理，先丢进来。"
+                  className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal leading-6 outline-none focus:border-orange-300"
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void analyzeInspiration()}
+                  disabled={isAnalyzing || !rawText.trim()}
+                  className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:bg-orange-300"
+                >
+                  {isAnalyzing ? "正在拆分…" : "AI 帮我拆成灵感"}
+                </button>
+                <button
+                  type="button"
+                  onClick={submitInspiration}
+                  className="rounded-lg border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-orange-800 transition hover:bg-orange-50"
+                >
+                  手动保存一条灵感
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowManualFields((current) => !current)}
+                className="w-fit text-sm font-semibold text-orange-800"
+              >
+                {showManualFields ? "收起高级编辑" : "高级编辑 / 手动补充"}
+              </button>
+              {showManualFields ? (
+                <div className="grid gap-3 rounded-lg border border-orange-100 bg-white p-3">
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    灵感标题
+                    <input
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                      placeholder="可选"
+                      className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-orange-300"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    灵感类型
+                    <select
+                      value={type}
+                      onChange={(event) => setType(event.target.value as InspirationType)}
+                      className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-orange-300"
+                    >
+                      {inspirationTypes.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    标签
+                    <input
+                      value={tags}
+                      onChange={(event) => setTags(event.target.value)}
+                      placeholder="可选，逗号分隔"
+                      className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-orange-300"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    来源/场景
+                    <input
+                      value={source}
+                      onChange={(event) => setSource(event.target.value)}
+                      placeholder="可选，例如客户咨询、项目复盘、平台观察"
+                      className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-orange-300"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    备注
+                    <textarea
+                      value={notes}
+                      onChange={(event) => setNotes(event.target.value)}
+                      rows={3}
+                      placeholder="可选，补充角度、风险或后续写法"
+                      className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal leading-6 outline-none focus:border-orange-300"
+                    />
+                  </label>
+                </div>
+              ) : null}
+
+              {candidates.length ? (
+                <div className="mt-3 rounded-lg border border-orange-100 bg-white p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-stone-950">待确认灵感</h3>
+                    <button
+                      type="button"
+                      onClick={confirmAllCandidates}
+                      className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-orange-800"
+                    >
+                      全部确认入池
+                    </button>
+                  </div>
+                  <div className="mt-3 grid gap-3">
+                    {candidates.map((candidate, index) => (
+                      <InspirationCandidateCard
+                        key={`${candidate.title}-${index}`}
+                        candidate={candidate}
+                        onChange={(patch) => updateCandidate(index, patch)}
+                        onConfirm={() => confirmCandidate(candidate, index)}
+                        onDiscard={() =>
+                          setCandidates((current) =>
+                            current.filter((_, currentIndex) => currentIndex !== index),
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-semibold text-stone-950">灵感列表</h2>
+              <select
+                value={filterType}
+                onChange={(event) => setFilterType(event.target.value as "全部" | InspirationType)}
+                className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm outline-none focus:border-orange-300"
+              >
+                <option value="全部">全部</option>
+                {inspirationTypes.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-4 grid gap-4">
+              {visibleInspirations.length ? (
+                visibleInspirations.map((item) => (
+                  <article
+                    key={item.id}
+                    className="rounded-lg border border-orange-100 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Tag>{item.type}</Tag>
+                      {item.recommendedUse ? <PurposeTag>{item.recommendedUse}</PurposeTag> : null}
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-stone-600">
+                        {inspirationStatusLabels[item.status]}
+                      </span>
+                    </div>
+                    <h3 className="mt-3 text-lg font-semibold leading-7 text-stone-950">
+                      {item.title || getInspirationFallbackTitle(item.content)}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-stone-600">
+                      {item.summary || getInspirationSummary(item.content)}
+                    </p>
+                    {item.reason ? (
+                      <p className="mt-2 rounded-lg bg-orange-50 px-3 py-2 text-xs leading-5 text-orange-900 ring-1 ring-orange-100">
+                        整理理由：{item.reason}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.tags.length ? (
+                        item.tags.map((tag) => <PurposeTag key={tag}>{tag}</PurposeTag>)
+                      ) : (
+                        <span className="text-xs text-stone-400">暂无标签</span>
+                      )}
+                    </div>
+                    <p className="mt-3 text-xs text-stone-500">
+                      创建时间：{formatInspirationDate(item.createdAt)}
+                      {item.source ? ` / 来源：${item.source}` : ""}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onConvertToTopic(item)}
+                        className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-orange-800"
+                      >
+                        转成公众号选题
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onCopy(item)}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-orange-50"
+                      >
+                        复制灵感
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onArchive(item.id)}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-orange-50"
+                      >
+                        归档
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(item.id)}
+                        className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-orange-200 bg-orange-50/60 p-6 text-sm leading-6 text-stone-600">
+                  当前筛选下还没有灵感。
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    </PageShell>
+  );
+}
+
+function InspirationCandidateCard({
+  candidate,
+  onChange,
+  onConfirm,
+  onDiscard,
+}: {
+  candidate: InspirationCandidate;
+  onChange: (patch: Partial<InspirationCandidate>) => void;
+  onConfirm: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <article className="rounded-lg border border-orange-100 bg-orange-50/40 p-3">
+      <div className="grid gap-2">
+        <label className="grid gap-1 text-xs font-semibold text-stone-600">
+          标题
+          <input
+            value={candidate.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+            className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal text-stone-900 outline-none focus:border-orange-300"
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-stone-600">
+          内容
+          <textarea
+            value={candidate.content}
+            onChange={(event) => onChange({ content: event.target.value })}
+            rows={3}
+            className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal leading-6 text-stone-900 outline-none focus:border-orange-300"
+          />
+        </label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="grid gap-1 text-xs font-semibold text-stone-600">
+            类型
+            <select
+              value={candidate.type}
+              onChange={(event) => onChange({ type: event.target.value as InspirationType })}
+              className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal text-stone-900 outline-none focus:border-orange-300"
+            >
+              {inspirationTypes.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-stone-600">
+            推荐用途
+            <select
+              value={candidate.recommendedUse}
+              onChange={(event) =>
+                onChange({ recommendedUse: event.target.value as InspirationRecommendedUse })
+              }
+              className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal text-stone-900 outline-none focus:border-orange-300"
+            >
+              {inspirationRecommendedUses.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="grid gap-1 text-xs font-semibold text-stone-600">
+          标签
+          <input
+            value={candidate.tags.join("，")}
+            onChange={(event) => onChange({ tags: parseInspirationTags(event.target.value) })}
+            className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal text-stone-900 outline-none focus:border-orange-300"
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-stone-600">
+          来源/场景
+          <input
+            value={candidate.source}
+            onChange={(event) => onChange({ source: event.target.value })}
+            className="rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm font-normal text-stone-900 outline-none focus:border-orange-300"
+          />
+        </label>
+        <p className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-stone-600 ring-1 ring-orange-100">
+          摘要：{candidate.summary || getInspirationSummary(candidate.content)}
+        </p>
+        <p className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-stone-600 ring-1 ring-orange-100">
+          理由：{candidate.reason || "AI 已按内容语义整理。"}
+        </p>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-orange-800"
+        >
+          确认入池
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="rounded-lg border border-orange-200 bg-white px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-50"
+        >
+          编辑后入池
+        </button>
+        <button
+          type="button"
+          onClick={onDiscard}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-orange-50"
+        >
+          丢弃
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -5784,6 +6516,216 @@ function buildAnalysis(hotspot: Hotspot) {
     })),
     topics,
   };
+}
+
+function parseInspirationTags(value: string) {
+  return value
+    .split(/[,，]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function normalizeInspirations(items: InspirationItem[]) {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .filter((item) => typeof item?.content === "string" && item.content.trim())
+    .map((item, index) => ({
+      id: typeof item.id === "string" && item.id ? item.id : `inspiration-${index}`,
+      title: typeof item.title === "string" ? item.title : "",
+      content: item.content.trim(),
+      type: inspirationTypes.includes(item.type) ? item.type : "其他",
+      tags: Array.isArray(item.tags)
+        ? item.tags.filter((tag) => typeof tag === "string" && tag.trim()).slice(0, 8)
+        : [],
+      source: typeof item.source === "string" ? item.source : "",
+      notes: typeof item.notes === "string" ? item.notes : "",
+      summary:
+        typeof item.summary === "string" && item.summary.trim()
+          ? item.summary.trim()
+          : getInspirationSummary(item.content),
+      recommendedUse: normalizeRecommendedUse(item.recommendedUse),
+      reason: typeof item.reason === "string" ? item.reason : "",
+      createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
+      updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date().toISOString(),
+      status: isInspirationStatus(item.status) ? item.status : "draft",
+    }));
+}
+
+function normalizeInspirationCandidates(
+  value: { inspirations?: InspirationCandidate[] } | InspirationCandidate[],
+) {
+  const rawItems = Array.isArray(value) ? value : value.inspirations;
+  if (!Array.isArray(rawItems)) return [];
+
+  return rawItems
+    .filter((item) => typeof item?.content === "string" && item.content.trim())
+    .slice(0, 5)
+    .map((item) => {
+      const content = item.content.trim();
+      return {
+        title:
+          typeof item.title === "string" && item.title.trim()
+            ? item.title.trim()
+            : getInspirationFallbackTitle(content),
+        content,
+        type: inspirationTypes.includes(item.type) ? item.type : "其他",
+        tags: Array.isArray(item.tags)
+          ? item.tags.filter((tag) => typeof tag === "string" && tag.trim()).slice(0, 8)
+          : [],
+        source:
+          typeof item.source === "string" && item.source.trim()
+            ? item.source.trim()
+            : "个人观察 / 待验证",
+        summary:
+          typeof item.summary === "string" && item.summary.trim()
+            ? item.summary.trim()
+            : getInspirationSummary(content),
+        recommendedUse: normalizeRecommendedUse(item.recommendedUse),
+        reason:
+          typeof item.reason === "string" && item.reason.trim()
+            ? item.reason.trim()
+            : "AI 根据原始灵感语义自动拆分整理。",
+        status: "draft" as const,
+      };
+    });
+}
+
+function normalizeRecommendedUse(value: unknown): InspirationRecommendedUse {
+  return typeof value === "string" &&
+    inspirationRecommendedUses.includes(value as InspirationRecommendedUse)
+    ? (value as InspirationRecommendedUse)
+    : "暂存观察";
+}
+
+function isInspirationStatus(value: unknown): value is InspirationStatus {
+  return (
+    value === "draft" ||
+    value === "topic_ready" ||
+    value === "outline_ready" ||
+    value === "archived"
+  );
+}
+
+function getInspirationFallbackTitle(content: string) {
+  const firstLine = content.split(/\r?\n/).find((line) => line.trim())?.trim() || "未命名灵感";
+  return firstLine.length > 28 ? `${firstLine.slice(0, 28)}...` : firstLine;
+}
+
+function getInspirationSummary(content: string) {
+  const clean = content.replace(/\s+/g, " ").trim();
+  return clean.length > 110 ? `${clean.slice(0, 110)}...` : clean;
+}
+
+function formatInspirationDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "时间待确认";
+
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatInspirationForCopy(item: InspirationItem) {
+  return [
+    item.title || getInspirationFallbackTitle(item.content),
+    `类型：${item.type}`,
+    item.tags.length ? `标签：${item.tags.join("、")}` : "",
+    item.source ? `来源/场景：${item.source}` : "",
+    item.summary ? `摘要：${item.summary}` : "",
+    item.recommendedUse ? `推荐用途：${item.recommendedUse}` : "",
+    item.content,
+    item.reason ? `整理理由：${item.reason}` : "",
+    item.notes ? `备注：${item.notes}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function buildTopicFromInspiration(item: InspirationItem, todayDate: string) {
+  const title = item.title || getInspirationFallbackTitle(item.content);
+  const description = getInspirationSummary(item.content);
+  const sourceLabel = item.source || "七七灵感池";
+  const purposes = getPurposesByInspirationType(item.type);
+  const summary = item.summary || getInspirationSummary(item.content);
+  const recommendedUse = item.recommendedUse || "公众号选题";
+  const hotspot: Hotspot = {
+    id: `inspiration-hotspot-${item.id}`,
+    sourceMode: "user_sources",
+    sourceChannel: sourceLabel,
+    sourceType: "用户导入热点",
+    sourceDate: todayDate,
+    verifiedAt: todayDate,
+    displayTag: "灵感池手动录入",
+    sourceCredibility: "中",
+    credibility: "中",
+    verificationStatus: "user_input",
+    sourceTitle: title,
+    sourceUrl: "",
+    sourceSummary: summary,
+    fitReasonForQiqi: `来自${item.type}灵感，适合继续拆成公众号选题。`,
+    sourceWarning: "",
+    evidenceLinks: [],
+    sourceEvidence: "用户在七七灵感池手动录入，作为内容创作灵感，不代表真实平台热点。",
+    isRealTimeSource: false,
+    title,
+    description: summary || description,
+    attentionReason: `${item.content}\n\n推荐用途：${recommendedUse}`,
+    fit: "高",
+    fitPlatforms: ["公众号", "朋友圈"],
+    purposes,
+    reason: `${sourceLabel}中的真实观察：${summary || description}`,
+  };
+  const topic: Topic = {
+    title,
+    angle: `${item.content}\n\n摘要：${summary}\n推荐用途：${recommendedUse}`,
+    purpose: purposes[0],
+    reason: item.reason || item.notes || `把这条${item.type}灵感发展成一篇有七七判断的公众号文章。`,
+    totalScore: 82,
+    recommendLevel: "优先写",
+    isPriority: true,
+    recommendReason: "来自手动灵感池，具备真实观察基础，适合优先进入公众号创作流程。",
+    scores: [
+      {
+        label: "真实观察",
+        value: 88,
+        explanation: "灵感来自手动记录，具备一线观察或表达基础。",
+      },
+      {
+        label: "公众号适配",
+        value: 82,
+        explanation: "可继续补充来源证据、七七判断和私域承接。",
+      },
+    ],
+    platformFits: [
+      {
+        platform: "公众号",
+        fit: "高",
+        reason: "适合展开成观点型或方法论型长文。",
+        format: "公众号深度文章",
+      },
+      {
+        platform: "朋友圈",
+        fit: "中",
+        reason: "可摘出观察和金句作为朋友圈素材。",
+        format: "观察短文",
+      },
+    ],
+  };
+
+  return { hotspot, topic };
+}
+
+function getPurposesByInspirationType(type: InspirationType): PurposeLabel[] {
+  if (type === "客户沟通" || type === "私域转化话题") return ["专业信任", "私域引流"];
+  if (type === "私域运营" || type === "IP操盘") return ["方法论沉淀", "商业转化"];
+  if (type === "女性健康") return ["专业信任", "内容沉淀"];
+  if (type === "金句片段") return ["观点表达", "IP显化"];
+  return ["观点表达", "内容沉淀"];
 }
 
 function buildUnifiedTopics(hotspot: Hotspot): Topic[] {

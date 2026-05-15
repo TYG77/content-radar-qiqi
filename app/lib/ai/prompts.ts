@@ -105,6 +105,15 @@ sourceType 固定使用“AI 今日选题机会”，isRealTimeSource 固定为 
 每条 source 必须包含：id、sourcePlatform、sourceTitle、sourceUrl、sourceSummary、keywords、sourceCredibility、sourceType、fitReasonForQiqi、createdAt。
 sourcePlatform 建议写“公开网页 / OpenAI web_search”；sourceType 固定“公开网页”；sourceCredibility 使用“中”或“待验证”；keywords 必须是数组；sourceUrl 没有就填空字符串；fitReasonForQiqi 说明为什么适合陈七七77 的大健康 IP 操盘手视角。
 如果结果不够，也只返回可用来源，不要编造。`;
+    case "inspirationAnalyze":
+      return `
+请把用户输入的一大段原始灵感拆分成 1-5 条可入池的内容灵感。
+每条灵感必须自动完成：拟标题、拆分内容、分类、标签、来源/场景推断、一句话摘要、推荐用途、整理理由。
+分类 type 只能从以下选项中选择：客户沟通、行业观察、女性健康、私域运营、IP操盘、短视频选题、公众号切入点、金句片段、AI工具观察、私域转化话题、其他。
+推荐用途 recommendedUse 只能从以下选项中选择：公众号选题、短视频口播、小红书图文、朋友圈观点、私域素材、暂存观察。
+如果内容只是个人观察或客户沟通感受，不要包装成真实平台热点；source 应写“个人观察 / 待验证”或更具体的“客户沟通 / 待验证”“项目复盘 / 待验证”。
+只返回 JSON object，顶层必须是 {"inspirations":[...]}。每条 inspirations item 必须包含 title、content、type、tags、source、summary、recommendedUse、reason、status，status 固定为 "draft"。
+`;
     case "generateOutline":
       return `
 生成公众号文章大纲：

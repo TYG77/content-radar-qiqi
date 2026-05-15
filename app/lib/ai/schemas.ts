@@ -176,6 +176,43 @@ export type MultiPlatformPlan = {
   platformSummary: { platform: string; focus: string }[];
 };
 
+export type InspirationType =
+  | "客户沟通"
+  | "行业观察"
+  | "女性健康"
+  | "私域运营"
+  | "IP操盘"
+  | "短视频选题"
+  | "公众号切入点"
+  | "金句片段"
+  | "AI工具观察"
+  | "私域转化话题"
+  | "其他";
+
+export type InspirationRecommendedUse =
+  | "公众号选题"
+  | "短视频口播"
+  | "小红书图文"
+  | "朋友圈观点"
+  | "私域素材"
+  | "暂存观察";
+
+export type InspirationCandidate = {
+  title: string;
+  content: string;
+  type: InspirationType;
+  tags: string[];
+  source: string;
+  summary: string;
+  recommendedUse: InspirationRecommendedUse;
+  reason: string;
+  status: "draft";
+};
+
+export type InspirationAnalysisResult = {
+  inspirations: InspirationCandidate[];
+};
+
 export type HotspotAnalysis = {
   totalScore?: number;
   recommendLevel?: "优先写" | "可作为延展" | "暂缓";
@@ -204,7 +241,8 @@ export type AiTask =
   | "generateMoments"
   | "generateMultiPlatform"
   | "optimizeXiaohongshu"
-  | "optimizeVideoScript";
+  | "optimizeVideoScript"
+  | "inspirationAnalyze";
 
 export type AiRequest = {
   task: AiTask;
@@ -227,5 +265,6 @@ export type AiRequest = {
     userNote?: string;
     uploadedTextMaterials?: string;
     sources?: TopicSource[];
+    rawText?: string;
   };
 };

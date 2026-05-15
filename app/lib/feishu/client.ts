@@ -1,6 +1,6 @@
 import { getDefaultContentRadarHotspots } from "@/app/lib/content-radar";
 
-import { buildDailyRadarFeishuMessage } from "./message";
+import { buildDailyRadarFeishuMessage, getContentRadarAppUrl } from "./message";
 import type { FeishuSendResult } from "./types";
 import type { DailyRadarFeishuPushInput, FeishuRadarHotspot } from "./types";
 
@@ -46,17 +46,16 @@ export async function pushDailyRadarToFeishu(
 ): Promise<FeishuSendResult> {
   try {
     const now = new Date();
-    const appUrl = process.env.CONTENT_RADAR_APP_URL?.trim();
-    if (!appUrl) {
+    const appUrlResult = getContentRadarAppUrl();
+    if (!appUrlResult.ok) {
       return {
         ok: false,
-        message: "CONTENT_RADAR_APP_URL 未配置，请先在环境变量中配置线上工作台地址。",
+        message: appUrlResult.message,
       };
     }
-
     const message = buildDailyRadarFeishuMessage({
       date: formatDate(now),
-      appUrl,
+      appUrl: appUrlResult.appUrl,
       generatedAt: formatDateTime(now),
       mode: input.mode === "scheduled" ? "scheduled" : "manual_test",
       hotspots: normalizeHotspots(input.hotspots),

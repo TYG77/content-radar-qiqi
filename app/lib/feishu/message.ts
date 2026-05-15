@@ -5,6 +5,10 @@ const MAX_TITLE_LENGTH = 44;
 const MAX_REASON_LENGTH = 86;
 const MAX_SOURCE_LENGTH = 86;
 const MAX_PLATFORM_COUNT = 5;
+const MISSING_APP_URL_MESSAGE =
+  "CONTENT_RADAR_APP_URL 未配置，请在 Vercel 和本地 .env.local 中配置线上工作台地址。";
+const LOCAL_APP_URL_MESSAGE =
+  "CONTENT_RADAR_APP_URL 当前不是线上地址，请配置为 https://content-radar-qiqi.vercel.app。";
 
 type DecisionScore = {
   hotScore: number;
@@ -19,6 +23,31 @@ type ScoredHotspot = FeishuRadarHotspot & {
   decisionScore: DecisionScore;
   originalIndex: number;
 };
+
+export function getContentRadarAppUrl():
+  | { ok: true; appUrl: string }
+  | { ok: false; message: string } {
+  const appUrl = process.env.CONTENT_RADAR_APP_URL?.trim().replace(/\/+$/, "");
+
+  if (!appUrl) {
+    return {
+      ok: false,
+      message: MISSING_APP_URL_MESSAGE,
+    };
+  }
+
+  if (isLocalAppUrl(appUrl)) {
+    return {
+      ok: false,
+      message: LOCAL_APP_URL_MESSAGE,
+    };
+  }
+
+  return {
+    ok: true,
+    appUrl,
+  };
+}
 
 export function buildDailyRadarFeishuMessage(input: DailyRadarFeishuMessageInput) {
   const scoredHotspots = input.hotspots
@@ -340,6 +369,10 @@ function withQuery(appUrl: string, params: Record<string, string>) {
   const query = new URLSearchParams(params).toString();
   const separator = appUrl.includes("?") ? "&" : "?";
   return `${appUrl}${separator}${query}`;
+}
+
+function isLocalAppUrl(appUrl: string) {
+  return /\blocalhost\b|127\.0\.0\.1/i.test(appUrl);
 }
 
 function safeText(value: string | undefined, fallback: string) {

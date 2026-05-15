@@ -1,6 +1,9 @@
 import { getDefaultContentRadarHotspots } from "@/app/lib/content-radar";
 import { sendFeishuWebhookMessage } from "@/app/lib/feishu/client";
-import { buildDailyRadarFeishuMessage } from "@/app/lib/feishu/message";
+import {
+  buildDailyRadarFeishuMessage,
+  getContentRadarAppUrl,
+} from "@/app/lib/feishu/message";
 
 export const runtime = "nodejs";
 
@@ -25,18 +28,17 @@ async function handleCronPush(request: Request) {
     );
   }
 
-  const appUrl = process.env.CONTENT_RADAR_APP_URL?.trim();
-  if (!appUrl) {
+  const appUrlResult = getContentRadarAppUrl();
+  if (!appUrlResult.ok) {
     return Response.json({
       ok: false,
-      message: "CONTENT_RADAR_APP_URL 未配置，请先在 Vercel 环境变量中配置线上工作台地址。",
+      message: appUrlResult.message,
     });
   }
-
   const now = new Date();
   const message = buildDailyRadarFeishuMessage({
     date: formatDate(now),
-    appUrl,
+    appUrl: appUrlResult.appUrl,
     generatedAt: formatDateTime(now),
     mode: "scheduled",
     hotspots: getDefaultContentRadarHotspots(),

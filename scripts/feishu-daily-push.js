@@ -9,14 +9,7 @@ async function main() {
 
   loadEnvConfig(process.cwd());
 
-  const appUrl = process.env.CONTENT_RADAR_APP_URL?.trim();
   const webhook = process.env.FEISHU_WEBHOOK_URL?.trim();
-
-  if (!appUrl) {
-    console.log("CONTENT_RADAR_APP_URL 未配置，请在项目根目录 .env.local 和 Vercel 环境变量中配置线上工作台地址。");
-    process.exitCode = 1;
-    return;
-  }
 
   if (!webhook) {
     console.log("FEISHU_WEBHOOK_URL 未配置，请在 .env.local 中配置飞书 webhook。");
@@ -25,15 +18,24 @@ async function main() {
   }
 
   try {
-    const [{ buildDailyRadarFeishuMessage }, { getDefaultContentRadarHotspots }] =
-      await Promise.all([
-        import("../app/lib/feishu/message.ts"),
-        import("../app/lib/content-radar.ts"),
-      ]);
+    const [
+      { buildDailyRadarFeishuMessage, getContentRadarAppUrl },
+      { getDefaultContentRadarHotspots },
+    ] = await Promise.all([
+      import("../app/lib/feishu/message.ts"),
+      import("../app/lib/content-radar.ts"),
+    ]);
+    const appUrlResult = getContentRadarAppUrl();
+    if (!appUrlResult.ok) {
+      console.log(appUrlResult.message);
+      process.exitCode = 1;
+      return;
+    }
+
     const now = new Date();
     const message = buildDailyRadarFeishuMessage({
       date: formatDate(now),
-      appUrl,
+      appUrl: appUrlResult.appUrl,
       generatedAt: formatDateTime(now),
       mode: "scheduled",
       hotspots: getDefaultContentRadarHotspots(),

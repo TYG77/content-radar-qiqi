@@ -1,4 +1,4 @@
-# Skill Registry
+﻿# Skill Registry
 
 ## 已创建 Skills
 
@@ -66,3 +66,14 @@
 | Skill 名称 | 用途 | 风险等级 | 状态 |
 | --- | --- | --- | --- |
 | qiqi-feishu-bot-workflow-diagnosis | 诊断飞书 webhook 与自建应用机器人能力差异，梳理消息事件、卡片回调、状态存储、语音输入和选题生成的最小技术路径；仅限 PRD / 诊断，不创建执行型 Skill。 | C | 已登记，暂不自动创建执行型 Skill |
+
+<!-- BEGIN:v3.4-migration-closeout-skill -->
+## v3.4 Migration Closeout Skill Candidate
+
+- Name: `project-path-migration-closeout`
+- Type: documentation / workflow Skill
+- Risk: A
+- Trigger: after project directory migration, before deleting old paths or continuing development.
+- Scope: confirm fixed path, Git status, sensitive config safety, docs update, lint/build health check, and deletion readiness.
+- Status: documented as reusable project workflow; no execution Skill created.
+<!-- END:v3.4-migration-closeout-skill -->

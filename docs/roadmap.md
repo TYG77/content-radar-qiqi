@@ -1,4 +1,4 @@
-# 七七内容雷达路线图
+﻿# 七七内容雷达路线图
 
 ## V1 已完成
 
@@ -150,3 +150,13 @@ V4 的核心目标是完成从内容生产到多平台分发、私域承接和�
 - 明确 webhook 只能做通知与跳转，不能做消息接收与回调。
 - 设计事件订阅、卡片 action、意图路由和状态存储的最小架构。
 - 先写 PRD，不进入代码实现。
+
+<!-- BEGIN:v3.4-migration-closeout -->
+## v3.4 Migration Closeout
+
+- Fixed current project path: `C:\Users\123\七七AI项目工作台\10-七七操盘手内容工作台`.
+- Migration closeout status: path fixed, lint/build verified in the migrated workspace, sensitive config rules documented.
+- Next work should use the fixed path by default.
+- Real-platform validation such as `npm.cmd run feishu:push` remains manual and requires explicit user request.
+- Follow-up: dependency audit findings can be triaged separately before production deployment.
+<!-- END:v3.4-migration-closeout -->

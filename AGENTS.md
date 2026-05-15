@@ -1,4 +1,4 @@
-<!-- BEGIN:nextjs-agent-rules -->
+﻿<!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
@@ -82,3 +82,31 @@ Skill 化复盘：
 4. 不得一次自动创建超过 2 个 Skill。
 5. 不得把所有流程塞进一个超大 Skill。
 6. 不得替用户伪装真实平台热点。
+
+<!-- BEGIN:v3.4-path-safety-rules -->
+## v3.4 Path And Safety Rules
+
+- Current fixed project path: `C:\Users\123\七七AI项目工作台\10-七七操盘手内容工作台`.
+- Deprecated paths: `C:\Users\123\vibe-projects\my-first-app` and `C:\Users\123\七七AI项目工作台\10-内容选题工作台`.
+- Future tasks default to the fixed path above.
+- AI control workspace stores cross-project rules, common engineering notes, MCP/tool indexes, PowerShell operations, Feishu SOP, Skill/Scale registry, and Obsidian templates.
+- This project keeps `app/`, `docs/`, `scripts/`, `public/`, `package.json`, `package-lock.json`, `next.config.ts`, `vercel.json`, `.env.local`, `.env.example`, project PRD, and workflow docs.
+- Sensitive backup directory: `C:\Users\123\七七AI项目工作台\98-敏感配置备份-禁止AI读取`.
+- Do not read, display, modify, or submit `.env.local` or sensitive backup contents.
+- Do not call Feishu / WeChat / AI real interfaces unless the user explicitly asks for validation.
+
+Commands:
+
+```powershell
+cd C:\Users\123\七七AI项目工作台\10-七七操盘手内容工作台
+npm.cmd run dev
+npm.cmd run lint
+npm.cmd run build
+```
+
+Real Feishu push acceptance, only with explicit user request:
+
+```powershell
+npm.cmd run feishu:push
+```
+<!-- END:v3.4-path-safety-rules -->

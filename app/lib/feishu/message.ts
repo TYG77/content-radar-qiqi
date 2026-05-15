@@ -5,6 +5,8 @@ const MAX_TITLE_LENGTH = 44;
 const MAX_REASON_LENGTH = 86;
 const MAX_SOURCE_LENGTH = 86;
 const MAX_PLATFORM_COUNT = 5;
+const INVALID_APP_URL_MESSAGE =
+  "CONTENT_RADAR_APP_URL must be an online workspace URL that starts with https://.";
 const MISSING_APP_URL_MESSAGE =
   "CONTENT_RADAR_APP_URL 未配置，请在 Vercel 和本地 .env.local 中配置线上工作台地址。";
 const LOCAL_APP_URL_MESSAGE =
@@ -27,12 +29,19 @@ type ScoredHotspot = FeishuRadarHotspot & {
 export function getContentRadarAppUrl():
   | { ok: true; appUrl: string }
   | { ok: false; message: string } {
-  const appUrl = process.env.CONTENT_RADAR_APP_URL?.trim().replace(/\/+$/, "");
+  const appUrl = normalizeContentRadarAppUrl(process.env.CONTENT_RADAR_APP_URL);
 
   if (!appUrl) {
     return {
       ok: false,
       message: MISSING_APP_URL_MESSAGE,
+    };
+  }
+
+  if (!/^https:\/\//i.test(appUrl)) {
+    return {
+      ok: false,
+      message: INVALID_APP_URL_MESSAGE,
     };
   }
 
@@ -373,6 +382,14 @@ function withQuery(appUrl: string, params: Record<string, string>) {
 
 function isLocalAppUrl(appUrl: string) {
   return /\blocalhost\b|127\.0\.0\.1/i.test(appUrl);
+}
+
+function normalizeContentRadarAppUrl(value: string | undefined) {
+  const text = value?.trim().replace(/^["']|["']$/g, "") ?? "";
+  if (!text) return "";
+
+  const httpsUrl = text.match(/https:\/\/[^\s"'<>]+/i)?.[0] ?? "";
+  return (httpsUrl || text).replace(/\/+$/, "");
 }
 
 function safeText(value: string | undefined, fallback: string) {

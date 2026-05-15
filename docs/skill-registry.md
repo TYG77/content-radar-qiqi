@@ -35,3 +35,10 @@
 | Skill 名称 | 用途 | 风险等级 | 状态 |
 | --- | --- | --- | --- |
 | qiqi-product-context-docs | 沉淀七七内容雷达的 PRD、业务上下文、工作流地图、路线图和开发规则，帮助后续任务先理解业务再改代码。 | A | 文档型低风险，可按需创建 |
+## 2026-05-15 低风险 UI/localStorage 流程登记
+
+| Skill 名称 | 用途 | 风险等级 | 状态 |
+| --- | --- | --- | --- |
+| qiqi-localstorage-ui-module | 为首页工作台新增低风险 UI 模块，包含浏览器 localStorage 保存、列表展示、筛选、复制、删除、归档和接入现有页面状态入口；禁止接真实平台、API、Provider、数据库、飞书、公众号后台。 | A | 已登记，暂不自动创建执行型 Skill |
+| qiqi-ai-task-ui-inbox | 为现有工作台新增低风险 AI 整理任务，复用既有 `/api/ai`、prompt、schema、task 链路，把原始文本整理为候选 UI 数据；禁止新增 Provider、真实平台来源、数据库、飞书、公众号后台和密钥配置。 | A/B | 已登记，暂不自动创建执行型 Skill |
+| qiqi-inspiration-fusion-planning | 沉淀七七真实内容资产池的 PRD、输入通道分层、热点融合工作流、数据结构扩展和后续任务拆分；仅用于方案与文档，不自动执行业务代码。 | A/B | 已登记，暂不自动创建执行型 Skill |

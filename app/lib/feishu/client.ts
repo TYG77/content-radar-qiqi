@@ -10,7 +10,7 @@ export async function sendFeishuWebhookMessage(message: unknown): Promise<Feishu
   if (!webhook) {
     return {
       ok: false,
-      message: "飞书 webhook 未配置，请先在 .env.local 中配置 FEISHU_WEBHOOK_URL。",
+      message: "飞书 webhook 未配置，请先配置 FEISHU_WEBHOOK_URL。",
     };
   }
 

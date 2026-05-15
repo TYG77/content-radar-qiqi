@@ -12,7 +12,7 @@ async function main() {
   const webhook = process.env.FEISHU_WEBHOOK_URL?.trim();
 
   if (!webhook) {
-    console.log("FEISHU_WEBHOOK_URL 未配置，请在 .env.local 中配置飞书 webhook。");
+    console.log("FEISHU_WEBHOOK_URL 未配置，请先配置飞书 webhook。");
     process.exitCode = 1;
     return;
   }

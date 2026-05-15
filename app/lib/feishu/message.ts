@@ -8,9 +8,9 @@ const MAX_PLATFORM_COUNT = 5;
 const INVALID_APP_URL_MESSAGE =
   "CONTENT_RADAR_APP_URL must be an online workspace URL that starts with https://.";
 const MISSING_APP_URL_MESSAGE =
-  "CONTENT_RADAR_APP_URL 未配置，请在 Vercel 和本地 .env.local 中配置线上工作台地址。";
+  "CONTENT_RADAR_APP_URL 未配置，请先配置线上工作台地址。";
 const LOCAL_APP_URL_MESSAGE =
-  "CONTENT_RADAR_APP_URL 当前不是线上地址，请配置为 https://content-radar-qiqi.vercel.app。";
+  "CONTENT_RADAR_APP_URL 当前不是线上地址，请配置为线上工作台地址。";
 
 type DecisionScore = {
   hotScore: number;
@@ -68,6 +68,7 @@ export function buildDailyRadarFeishuMessage(input: DailyRadarFeishuMessageInput
     }));
   const recommended = pickRecommendedHotspot(scoredHotspots);
   const workspaceUrl = withQuery(input.appUrl, { from: "feishu" });
+  const inspirationUrl = withQuery(input.appUrl, { from: "feishu", view: "inspiration" });
   const todayUrl = withQuery(input.appUrl, {
     from: "feishu",
     view: "today",
@@ -88,7 +89,7 @@ export function buildDailyRadarFeishuMessage(input: DailyRadarFeishuMessageInput
     recommended ? buildRecommendationBlock(recommended) : buildEmptyHotspotBlock(),
     { tag: "hr" },
     ...(scoredHotspots.length
-      ? scoredHotspots.map(formatHotspotCardBlock)
+      ? scoredHotspots.flatMap((hotspot) => formatHotspotCardBlocks(hotspot, input.appUrl))
       : [buildEmptyHotspotBlock()]),
     { tag: "hr" },
     {
@@ -99,15 +100,24 @@ export function buildDailyRadarFeishuMessage(input: DailyRadarFeishuMessageInput
           text: {
             tag: "plain_text",
             content: "打开内容雷达工作台",
+            },
+            url: workspaceUrl,
+            type: "primary",
           },
-          url: workspaceUrl,
-          type: "primary",
-        },
-        {
-          tag: "button",
-          text: {
-            tag: "plain_text",
-            content: "查看今日推荐选题",
+          {
+            tag: "button",
+            text: {
+              tag: "plain_text",
+              content: "记录一条灵感",
+            },
+            url: inspirationUrl,
+            type: "default",
+          },
+          {
+            tag: "button",
+            text: {
+              tag: "plain_text",
+              content: "查看今日推荐选题",
           },
           url: todayUrl,
           type: "default",
@@ -137,6 +147,7 @@ export function buildDailyRadarFeishuMessage(input: DailyRadarFeishuMessageInput
 function buildRecommendationBlock(hotspot: ScoredHotspot) {
   const title = truncate(safeText(hotspot.title, "未命名选题"), MAX_TITLE_LENGTH);
   const reason = buildRecommendationReason(hotspot);
+  const angle = buildInspirationAngleLine(hotspot);
 
   return {
     tag: "div",
@@ -147,12 +158,13 @@ function buildRecommendationBlock(hotspot: ScoredHotspot) {
           title,
         )}》**</font>`,
         `推荐原因：${escapeLarkMd(reason)}`,
+        angle ? `可结合的七七灵感角度：${escapeLarkMd(angle)}` : "",
       ].join("\n"),
     },
   };
 }
 
-function formatHotspotCardBlock(hotspot: ScoredHotspot) {
+function formatHotspotCardBlocks(hotspot: ScoredHotspot, appUrl: string) {
   const title = truncate(safeText(hotspot.title, "未命名选题"), MAX_TITLE_LENGTH);
   const reason = truncate(
     safeText(
@@ -169,29 +181,52 @@ function formatHotspotCardBlock(hotspot: ScoredHotspot) {
   const verification = formatVerification(hotspot);
   const action = buildActionSuggestion(hotspot);
   const score = hotspot.decisionScore;
+  const angle = buildInspirationAngleLine(hotspot);
+  const topicUrl = withQuery(appUrl, {
+    from: "feishu",
+    view: "topic",
+    topicIndex: String(hotspot.originalIndex),
+  });
 
-  return {
-    tag: "div",
-    text: {
-      tag: "lark_md",
-      content: [
-        `<font color="orange">**${String(hotspot.originalIndex + 1).padStart(
-          2,
-          "0",
-        )}｜${escapeLarkMd(title)}**</font>`,
-        `**综合推荐分：${score.totalScore} / 100｜${getScoreLevel(score.totalScore)}**`,
-        `热点相关度 ${score.hotScore}｜七七IP匹配度 ${score.ipFitScore}｜公众号成文价值 ${score.articleScore}`,
-        `私域转化价值 ${score.conversionScore}｜来源可信度 ${score.sourceScore}`,
-        "",
-        `推荐理由：${escapeLarkMd(reason)}`,
-        "",
-        `> 【来源信号】${escapeLarkMd(source)}`,
-        `> 【适合平台】${escapeLarkMd(platforms)}`,
-        `> 【验证状态】${escapeLarkMd(verification)}`,
-        `> 【操作建议】${escapeLarkMd(action)}`,
-      ].join("\n"),
+  return [
+    {
+      tag: "div",
+      text: {
+        tag: "lark_md",
+        content: [
+          `<font color="orange">**${String(hotspot.originalIndex + 1).padStart(
+            2,
+            "0",
+          )}｜${escapeLarkMd(title)}**</font>`,
+          `**综合推荐分：${score.totalScore} / 100｜${getScoreLevel(score.totalScore)}**`,
+          `热点相关度 ${score.hotScore}｜七七IP匹配度 ${score.ipFitScore}｜公众号成文价值 ${score.articleScore}`,
+          `私域转化价值 ${score.conversionScore}｜来源可信度 ${score.sourceScore}`,
+          "",
+          `推荐理由：${escapeLarkMd(reason)}`,
+          angle ? `可结合的七七灵感角度：${escapeLarkMd(angle)}` : "",
+          "",
+          `> 【来源信号】${escapeLarkMd(source)}`,
+          `> 【适合平台】${escapeLarkMd(platforms)}`,
+          `> 【验证状态】${escapeLarkMd(verification)}`,
+          `> 【操作建议】${escapeLarkMd(action)}`,
+        ].join("\n"),
+      },
     },
-  };
+    {
+      tag: "action",
+      actions: [
+        {
+          tag: "button",
+          text: {
+            tag: "plain_text",
+            content: `选择选题 ${hotspot.originalIndex + 1}`,
+          },
+          url: topicUrl,
+          type: "primary",
+        },
+      ],
+    },
+  ];
 }
 
 function buildEmptyHotspotBlock() {
@@ -314,6 +349,10 @@ function buildActionSuggestion(hotspot: ScoredHotspot) {
   if (hasPlatform(hotspot, "小红书")) return "适合小红书图文做收藏型表达。";
   if (hasPlatform(hotspot, "私域")) return "适合作为私域转化素材。";
   return "适合先在工作台拆解角度，再决定内容载体。";
+}
+
+function buildInspirationAngleLine(hotspot: ScoredHotspot) {
+  return safeText(hotspot.useAngle || hotspot.matchReason, "");
 }
 
 function formatPlatforms(value: string[] | undefined) {

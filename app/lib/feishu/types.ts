@@ -11,6 +11,12 @@ export type FeishuRadarHotspot = {
   totalScore?: number;
   recommendReason?: string;
   recommendLevel?: string;
+  useAngle?: string;
+  matchReason?: string;
+  articlePlacement?: string;
+  contentRole?: string;
+  suggestedExpression?: string;
+  caution?: string;
   scores?: {
     label: string;
     value: number;

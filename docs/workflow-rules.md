@@ -68,6 +68,25 @@ These are forbidden in all modes:
 6. Perform broad refactors without confirmation.
 7. Only change UI copy while leaving the real chain broken.
 
+## Development Rules For Qiqi Content Radar
+
+1. New stages and complex modules must start with PRD/context documentation before implementation.
+2. Do business decomposition first, then engineering decomposition.
+3. One implementation task should contain no more than 3 major features.
+4. Any request with more than 5 functional points must be split into PRD first.
+5. Real platforms, APIs, secrets, WeChat Official Account, Feishu/Lark, deployment, permissions, billing, or security require diagnosis before code changes.
+6. Never read, display, or modify `.env.local`.
+7. Never output API keys, tokens, webhooks, AppSecret, access_token, cron secrets, or provider secrets.
+8. Never auto-publish WeChat Official Account articles.
+9. Do not break proven main flows while adding new features.
+10. Preserve the V1 local/online split: Vercel for selection, writing, layout, Feishu entry, and Cron; localhost for WeChat material upload, cover media_id, and draft writing.
+11. Feishu push must stay unified across page push, PowerShell `npm.cmd run feishu:push`, and Cron.
+12. New features should reuse the existing article generation flow before creating a new generation chain.
+13. Every task should end with manual acceptance paths.
+14. After code changes, check `git status`; when needed, commit, push, and verify Vercel Production deployment.
+15. Every task must include Skillization Review.
+16. High-risk real-platform execution Skills must not be auto-created; register them as pending confirmation only.
+
 ## Acceptance Requirements
 
 After every code execution:
